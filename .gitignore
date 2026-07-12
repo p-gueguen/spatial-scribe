@@ -1,0 +1,29 @@
+# Environments / build
+.pixi
+.pixi/
+*.egg-info/
+build/
+dist/
+__pycache__/
+*.pyc
+
+# Data & caches: only the shipped public demo is tracked (via Git LFS)
+data/*
+!data/demo_public.h5ad
+!data/README.md
+cache/
+*.zarr/
+*.parquet
+!tests/**/*.parquet
+
+# Node
+webapp/node_modules
+webapp/dist
+
+# Secrets
+.env
+*.key
+
+# OS / editor
+.DS_Store
+.ipynb_checkpoints/

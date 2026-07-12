@@ -1,0 +1,11 @@
+# SpatialScribe - one command to run the whole app:  docker compose up  ->  http://localhost:8000
+services:
+  spatialscribe:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Pass your key through from the host; the app runs without it (copilot disabled).
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5}
+      - SPATIALSCRIBE_FORCE_CPU=1

@@ -1,0 +1,320 @@
+# SpatialScribe — draft QC thresholds for cell-type annotation in imaging spatial transcriptomics.
+# Companion to docs/cell-annotation-qc.md. THESE ARE PROVISIONAL STARTING POINTS to tune on real
+# data, NOT settled cutoffs (per 10x: "there are no universal thresholds"). Ship as tunable config.
+#
+# direction:  "low"  = smaller is worse  (flag when value < threshold)
+#             "high" = larger is worse   (flag when value > threshold)
+#             "categorical" / "relative" handled by the metric's own rule.
+# scope:      "section" = gates the whole run; "cell" = gates an individual annotation.
+# basis:      where the number comes from (10x-published vs repo convention vs design default).
+# cost:       data needed — "cellxgene" | "reference" | "molecule" | "zstack".
+
+meta:
+  version: 0.1-draft
+  platform_primary: xenium
+  platforms_secondary: [merscope_vizgen, cosmx_nanostring]
+  note: >
+    Section-level Layer-0 numbers are 10x-published (do not invent). Per-cell and
+    annotation-confidence numbers are provisional design defaults; calibrate per dataset.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 0 — Run / section acquisition QC (10x-published; mirrors qc.py XENIUM_THRESHOLDS)
+# ─────────────────────────────────────────────────────────────────────────────
+layer0_section:
+  fraction_transcripts_decoded_q20:   {direction: low,  warn: 0.70, fail: 0.50, scope: section, basis: 10x_published, cost: molecule}
+  fraction_custom_transcripts_decoded_q20: {direction: low, warn: 0.60, fail: 0.50, scope: section, basis: 10x_published, cost: molecule, note: "custom add-on probes ONLY; low value flags specific failing probes, not sample quality"}
+  fraction_transcripts_assigned:      {direction: low,  warn: 0.50, fail: 0.30, scope: section, basis: 10x_published, cost: cellxgene}
+  fraction_empty_cells:               {direction: high, warn: 0.15, fail: 0.25, scope: section, basis: 10x_published, cost: cellxgene}
+  median_genes_per_cell:              {direction: low,  warn: 20,   fail: 10,   scope: section, basis: 10x_published, cost: cellxgene}
+  median_transcripts_per_cell:        {direction: low,  warn: 50,   fail: 25,   scope: section, basis: 10x_published, cost: cellxgene}
+  negative_control_probe_counts_per_control_per_cell: {direction: high, warn: 0.02, fail: 0.05, scope: section, basis: 10x_published, cost: cellxgene}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 1 — Segmentation QC (per cell)
+# ─────────────────────────────────────────────────────────────────────────────
+layer1_segmentation:
+  cell_area_um2:
+    direction: relative
+    warn: {lt: 8, gt: 400}
+    fail: {lt: 4, gt_pct: 99.5}   # implausibly small fragment / large merged blob (dataset-relative)
+    scope: cell
+    basis: plausibility_dataset_relative
+    cost: cellxgene
+  nucleus_present:
+    rule: "False + low counts -> Unassigned:low_quality candidate"
+    scope: cell
+    cost: cellxgene
+  nucleus_to_cell_area_ratio:
+    rule: "flag extremes; ~1.0 with high counts => possible merged nucleus doublet"
+    typical: [0.2, 0.6]
+    scope: cell
+    cost: cellxgene
+  expansion_distance_um:
+    rule: "prefer biology-matched expansion; large fixed halos pull in background"
+    reference_values_salas_2025: {nuclear_radius_um: 5.06, ideal_expansion_um: 5.64, background_beyond_centroid_um: 10.71}
+    xoa_default_history: {v1_x: 15, v2_0_plus: 5}   # 10x moved default 15um -> 5um; check XOA version of the data
+    scope: setting
+    basis: salas_natmethods_2025
+    cost: molecule
+    note: "legacy 15um fixed expansion >> ideal ~5.64um => spillover; validate segmentation with NMP + reads-assigned; cellAdmix (Mitchel 2025) can isolate molecular admixtures pre-annotation"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 2 — Per-cell count & expression QC  (mirrors qc.py DEFAULT_FILTER)
+# ─────────────────────────────────────────────────────────────────────────────
+layer2_counts:
+  total_counts:        {direction: low,  warn: 25, fail: 10, scope: cell, basis: repo_minCounts, cost: cellxgene}
+  # !! The count floor is NOT panel-transferable. Same <10 floor removes 0.21% of cells on a
+  #    targeted Xenium panel but ~60% on Xenium Prime 5K (SpatialScribe's demo). Index per panel:
+  total_counts_panel_schedule:
+    targeted_lt1000_genes: {warn: 25, fail: 10}
+    xenium_prime_5k:       {warn: null, fail: distributional}   # use section-relative percentile, NOT a fixed 10
+    whole_transcriptome:   {warn: null, fail: distributional}
+    rule: "prefer a section-relative percentile floor (e.g. drop bottom X% or <Nth pct) over a fixed count on large panels"
+    basis: marconato_split_natmethods_2026
+  # concrete percentile used by qc.suggest_count_floor for >=1000-gene panels:
+  large_panel_percentile: 0.02
+  n_genes_by_counts:   {direction: low,  warn: 10, fail: 5,  scope: cell, basis: repo_DEFAULT_FILTER, cost: cellxgene}
+  pct_counts_control:  {direction: high, warn: 2.0, fail: 5.0, scope: cell, basis: repo_max_pct_control, cost: cellxgene, unit: percent}
+  max_single_gene_fraction: {direction: high, warn: 0.50, fail: null, scope: cell, basis: design_default, cost: cellxgene, note: "one gene dominating -> artifact/rRNA or extreme specialization"}
+  ucell_maxRank: {value: 150, scope: setting, basis: repo_convention, note: "Xenium sparsity: default 1500 dilutes scores to zero-count noise"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 3 — Contamination / spillover / signal-integrity QC
+# ─────────────────────────────────────────────────────────────────────────────
+layer3_contamination:
+  crisp_purity_cell:
+    rule: "impure if cell detects markers from >=2 disjoint lineages (>=1 count)"
+    warn: impure
+    scope: cell
+    basis: crisp_definition
+    cost: cellxgene
+  mecr_dataset:
+    direction: high
+    rule: "mean over disjoint-lineage marker pairs of #(both>0)/#(either>0); lower=cleaner; compare pre/post purification"
+    scope: dataset
+    basis: hartman_satija_2024
+    cost: cellxgene
+  pmp_cell:
+    direction: low
+    rule: "fraction of a cell's transcripts from its ASSIGNED type's markers; low => impure/mislabeled"
+    scope: cell
+    cost: cellxgene
+  ovrlpy_vsi:
+    direction: low
+    warn: {section_pct: 25}
+    fail: {section_pct: 10}
+    scope: cell
+    basis: relative_to_section
+    cost: zstack
+    note: "flags vertical overlap / doublets / folds; needs transcripts.parquet with z"
+  rctd_spot_class:
+    direction: categorical
+    warn: [doublet_uncertain]
+    fail: [reject]
+    pass: [singlet, doublet_certain]
+    scope: cell
+    basis: rctd_doublet_mode
+    cost: reference
+  ncp_negative_coexpression_purity:
+    direction: low            # higher = better specificity; flag when below
+    warn: 0.80
+    fail: null
+    scope: dataset
+    basis: salas_natmethods_2025   # all commercial platforms mean NCP > 0.8
+    cost: reference
+    note: "% of reference non-coexpressed gene pairs staying non-coexpressed in situ. NOT the 10x neg-control-probe rate."
+  nmp_negative_marker_purity:
+    direction: high           # % reads of 'shouldn't-express' markers in a type; lower=cleaner
+    warn: null                # dataset/tissue-relative; use to COMPARE segmentations
+    fail: null
+    scope: cell_type
+    basis: salas_natmethods_2025
+    cost: reference
+    note: "direct readout of segmentation-driven mis-assignment into annotations"
+  three_d_coherence_score:
+    direction: low
+    warn: 0.20
+    fail: 0.20                # <0.2 => potential vertical overlap / mixed-source cell (~1.8% cells typical)
+    scope: cell
+    basis: salas_natmethods_2025
+    cost: zstack
+    note: "cosine similarity of top-vs-bottom z-half latent vector fields; peer-reviewed analogue of ovrlpy VSI"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 4 — Panel adequacy / resolvability (per cell TYPE; mirrors panel_check.py)
+# ─────────────────────────────────────────────────────────────────────────────
+layer4_panel:
+  marker_coverage_traffic_light:
+    green: {n_present_gte: 3, confidence_ceiling: 1.0}
+    amber: {n_present_range: [1, 2], confidence_ceiling: 0.6}
+    red:   {n_present: 0, action: abstain, reason: "Unresolvable:panel"}
+    scope: cell_type
+    basis: H3_panel_check
+    cost: cellxgene
+  confusable_pair_rule: "no private on-panel marker either way -> merge types, report coarse group + warning"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 4b — Cluster confidence (data-driven over/under-clustering: merge/split nudges)
+# Companion to cluster_confidence.py. Advisory only; the cluster rung of the uncertainty
+# ladder (cluster -> cell -> panel). A RandomForest-vs-permutation test asks "are these two
+# clusters the same population?" (merge); a bimodality coefficient asks "does this cluster
+# hide substructure?" (split). Reimplements the sc-SHC / CHOIR idea in scikit-learn.
+# ─────────────────────────────────────────────────────────────────────────────
+cluster_confidence:
+  merge_pvalue_alpha:
+    value: 0.05                       # conservative default
+    aggressive: 0.25                  # exploratory "merge more" toggle (sc-SHC alpha-as-a-slider UX)
+    rule: "RandomForest-vs-permuted-label separability; p > alpha => clusters indistinguishable => MERGE"
+    basis: [scSHC_grabski_purdom_2023, CHOIR_natgenet_2025]
+  merge_accuracy_floor: 0.65          # RF balanced accuracy below this => clusters ~indistinguishable => MERGE
+  merge_n_permutations: 10            # for the reported null/p only (verdict is accuracy-primary, CHOIR-style)
+  split_bimodality: 0.555             # BC: uniform=1, normal=1/3; > 5/9 => bimodal main axis => SPLIT
+  min_cluster_cells: 20
+  scope: cluster
+  basis: [scSHC_grabski_purdom_2023, CHOIR_natgenet_2025, bimodality_coefficient_SAS]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 5 — Annotation-confidence QC (per cell)
+# ─────────────────────────────────────────────────────────────────────────────
+layer5_confidence:
+  composite_confidence:
+    direction: low
+    warn: 0.50
+    fail: 0.25   # -> abstain: Uncertain:low_confidence
+    scope: cell
+    basis: design_default
+    cost: mixed
+    formula: "clip01(calibrated_posterior * (1-contamination_penalty) * panel_ceiling * spatial_weight)"
+  low_signal_gate:
+    rule: "hard-abstain (Unassigned:low_quality) when counts < panel-indexed floor OR n_genes < panel-indexed gene floor (qc.RICH_PANEL_MIN_GENES = 15 on >=1000-gene panels; 5 on targeted)"
+    basis: shares_layer2_total_counts_panel_schedule
+    note: >
+      The count floor here is the SAME panel-indexed floor as layer2_counts
+      (qc.panel_indexed_floor): fixed 10 on targeted panels, section-relative percentile on
+      Prime 5K / WTA. Do NOT reintroduce a fixed counts<10 gate - it silently abstained the
+      5K sparse tail while Layer-2 filtering kept it (the 480-vs-5K inconsistency).
+      The GENE floor is likewise panel-indexed (qc.RICH_PANEL_MIN_GENES): an ABSOLUTE 15 detected
+      genes on a rich (>=1000-gene) panel, only 5 on a targeted one. A flat genes<5 let ~8-count
+      near-empty cells on Prime 5K survive and seed single-gene artefact clusters at low leiden res.
+  marker_score_margin:
+    direction: low
+    rule: "top1 - top2 marker score; arm-relative; ~0 => abstain (ambiguous). MARGIN is the confidence, not the absolute score"
+    scope: cell
+    cost: cellxgene
+  reference_posterior_max_prob:
+    direction: low
+    warn: 0.50
+    fail: 0.30
+    scope: cell
+    basis: celltypist_style
+    cost: reference
+  conformal_set_size:
+    direction: high
+    pass: 1
+    warn: 2
+    fail_ambiguous: {gt: 3}
+    fail_novel: {eq: 0}
+    scope: cell
+    basis: distribution_free_coverage
+    cost: reference
+  consensus_agreement:
+    direction: low
+    rule: "fraction of annotation methods agreeing; strong disagreement => WARN/flag"
+    scope: cell
+    cost: mixed
+  annotation_stability_subsampling:
+    direction: high            # label-flip rate under transcript subsampling; higher=worse
+    warn: 0.10
+    fail: 0.20
+    scope: cell
+    basis: elife_2025_merfish   # ~20% transcript loss flips 10-15% of labels
+    cost: cellxgene
+    rule: "randomly drop a fraction of a cell's transcripts, re-annotate, measure label-flip rate over reps; cheap, reference-free confidence proxy"
+  classification_vs_state_asymmetry:
+    rule: "cell-type CLASSIFICATION is comparatively robust to segmentation error; STATE/subtype/DE/LR calls on the same segment are highly sensitive (Mitchel Nat Genet 2025). Allow coarse label=PASS while fine state=WARN on the same cell."
+    scope: policy
+    basis: mitchel_natgenet_2025
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 5b — popV consensus uncertainty (cross-method AGREEMENT = the trusted confidence signal)
+# Ports popV (Kimmel/Ergen/Yosef, Nat Genet 2024): the number of ensemble methods agreeing tracks
+# accuracy far better than any single method's self-score. Consumed by consensus.py, folded into
+# annotate.apply_confidence (weighted only with a diverse ensemble) and rejection.py ('methods disagree').
+# ─────────────────────────────────────────────────────────────────────────────
+consensus_popv:
+  min_trust_methods: 3               # mirrors consensus.MIN_TRUST_METHODS; below this, surface but do NOT weight
+  reliability_bins:                  # agreement-fraction -> bin. RECALIBRATED on a real reference/query
+    very_high: 0.9                    # benchmark (hematopoietic scRNA): 0.6 agreement was only ~44% accurate,
+    high: 0.7                         # so the old 0.875/0.6/0.4 'high>=0.6' was too lenient. Provisional -
+    moderate: 0.5                     # re-tune per dataset (this curve is one hard continuum tissue).
+  disagreement_agreement_max: 0.5    # agreement below this (with >= min_trust_methods) -> 'method_disagreement' reason
+  scope: cell
+  basis: [popV_kimmel_ergen_yosef_natgenet_2024, latchbio_popv_pbmc_benchmark]
+  note: "exact-label majority voting (NOT ontology-aware) - the simplification LatchBio also adopted in production"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAYER 6 — Spatial-context QC of the label (per cell / per arm)
+# ─────────────────────────────────────────────────────────────────────────────
+layer6_spatial:
+  spatial_coherence_frac_same_label_neighbors:
+    direction: low
+    warn: 0.20      # = PAS threshold
+    fail: null      # DOWN-WEIGHT ONLY — never delete; rare/infiltrating cells are legitimately incoherent
+    k_neighbors: 15
+    scope: cell
+    basis: STEAM_PAS
+    cost: cellxgene
+  pas_proportion_abnormal_spots:
+    direction: high
+    rule: "% cells with <20% same-label neighbors; dataset-level annotation-noise summary"
+    scope: dataset
+    cost: cellxgene
+  neighborhood_enrichment_sanity:
+    rule: "squidpy nhood_enrichment/co_occurrence vs permutation null; biologically impossible adjacencies flag systematic errors"
+    scope: dataset
+    cost: cellxgene
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cross-platform profile modifiers (secondary platforms) — the metric FAMILIES are
+# identical; only the cutoffs move. Layer these on top of the panel-size indexing.
+# ─────────────────────────────────────────────────────────────────────────────
+cross_platform:
+  specificity_fdr_ranking: [xenium, merscope, cosmx]   # best -> worst on-target/FDR (2023-era chemistries)
+  neg_control_threshold_scaling:
+    xenium: 1.0
+    merscope: 1.0
+    cosmx: loosen   # CosMx has higher background + spatial aggregation of neg-control => bigger margin needed
+    basis: [nat_commun_s41467-025-64990-y, nat_commun_s41467-025-64292-3]
+  segmentation_precision_dense:  {xenium: 0.90, cosmx: 0.90, merscope: 0.83, basis: nat_commun_s41467-025-64990-y}
+  typical_qc_retention_ffpe:     {xenium: [0.92, 0.96], cosmx: [0.92, 0.96], merscope: [0.03, 0.28], basis: nat_commun_s41467-025-64990-y}
+  retention_gate_rule: "acceptable %-cells-retained is PLATFORM/ASSAY-aware; do NOT hard-fail a section on retention alone (MERSCOPE FFPE can legitimately lose 70-97%)"
+  sensitivity_ratio: "NOT hard-coded — a specific Xenium 2x CosMx / 20x MERSCOPE ceiling was REFUTED in verification; calibrate the count floor per dataset"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Abstention taxonomy (verdict = FAIL) — every un-typeable cell gets a reason code
+# ─────────────────────────────────────────────────────────────────────────────
+abstention_labels:
+  Unassigned_low_quality:  {from_layer: [1, 2], message: "Object too small / too few transcripts to identify."}
+  Ambiguous_mixed:         {from_layer: [3],    message: "Signal is a mix of neighboring cell types (spatial doublet or spillover)."}
+  Unresolvable_panel:      {from_layer: [4],    message: "Panel lacks the genes to separate these types here; reported as the coarse group."}
+  Uncertain_low_confidence: {from_layer: [5, 6], message: "No cell type scored clearly above the others."}
+  Novel_unknown:           {from_layer: [5],    message: "Does not match any reference type; possibly a state/type not in the reference."}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Section-level annotatability summary (report headline)
+# ─────────────────────────────────────────────────────────────────────────────
+annotatability_summary:
+  pct_confidently_typed_target: {good_ffpe_xenium: 0.65, note: "tune; verdict==PASS"}
+  report: [pct_pass, pct_warn, pct_abstain, top3_abstention_reasons, panel_adequacy_roster]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Self-verification of labels vs canonical markers (analysis/verify.py, advisory).
+# A type FAILS when its marker-argmax agreement is below argmax_agreement_min AND either its own
+# program is not the section-mean top OR its one-vs-rest AUC is below auc_min. A single confuser
+# taking >= confusion_dominant_frac of the miss flags mislabel/merge (else hidden substructure).
+# ─────────────────────────────────────────────────────────────────────────────
+verify:
+  argmax_agreement_min: 0.5    # fraction of a type's cells whose top marker-program is that type
+  auc_min: 0.6                 # one-vs-rest marker-program AUC corroborator
+  min_cells: 20                # skip types too small to audit reliably
+  confusion_dominant_frac: 0.5 # a single confuser >= this share of the miss -> mislabel / merge

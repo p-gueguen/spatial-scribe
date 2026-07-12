@@ -1,0 +1,65 @@
+# pixi manifest for SpatialScribe - the `main` (CPU/dev) environment.
+#
+#   pixi install -e main
+#   pixi run smoke      # import check
+#   pixi run test       # pytest
+#   pixi run serve      # FastAPI backend (serves the built React SPA + /api)
+#
+# GPU and ovrlpy are installed OUTSIDE this manifest (their deps clash / are node-specific):
+#   * GPU:    on a GPU node, `conda install -c rapidsai -c conda-forge rapids-singlecell`
+#             (or a dedicated pixi manifest there). backend.py auto-detects and falls back to CPU.
+#   * ovrlpy: a throwaway env, e.g. `uv venv ovrlpy && uv pip install ovrlpy` - run
+#             subprocesses/ovrlpy/run_ovrlpy.py there; it writes a VSI parquet the main app joins back.
+#
+# Heavy env content lives on /data (home 100GB quota); .pixi is symlinked there.
+
+[workspace]
+name = "spatial-scribe"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+pytest = ">=9.1.1,<10"
+pyyaml = "*"
+
+[pypi-dependencies]
+# extras = ["transfer"] pulls `tacco`, the documented default reference-transfer engine (the pin itself
+# lives in pyproject [project.optional-dependencies], single source of truth). Without it the TACCO arm
+# raises ImportError and capabilities.py's bare try/except silently records status="skipped", so
+# `pixi run test` green-lights a code path the product never exercises. That is exactly how a validation
+# run scored the celltypist fallback while believing it was the default engine.
+spatialscribe = { path = ".", editable = true, extras = ["transfer"] }
+# Metrics battery is now the standalone package (single source of truth):
+# github.com/p-gueguen/spatial-anno-metrics. analysis/eval_metrics.py + signal_qc.py are thin
+# re-export shims. Git default so a STANDALONE clone resolves: the old ../../../ local path only
+# existed on the author's disk, so `pixi install` failed for everyone else. To co-develop the metrics
+# package alongside this repo, flip this back to an editable local checkout:
+#   spatial-anno-metrics = { path = "../../../spatial-anno-metrics", editable = true }
+spatial-anno-metrics = { git = "https://github.com/p-gueguen/spatial-anno-metrics.git" }
+# FastAPI backend (backend/app.py) runtime. These belong to the APP, not the importable
+# `spatialscribe` library: analysis/ is UI-agnostic and never imports fastapi (only backend/ does,
+# and backend/ lives outside src/), so they stay in this env manifest, not in pyproject
+# [project.dependencies]. The `serve` task needs uvicorn; fastapi needs starlette (pulled
+# transitively - its omission from the lock is what broke `import fastapi`). `[standard]` matches
+# deploy/Dockerfile (`fastapi "uvicorn[standard]"`): uvloop/httptools/websockets/watchfiles.
+# python-multipart is REQUIRED at import time (not lazy): the /reference/upload endpoint takes
+# multipart form data, and FastAPI validates that at route-registration - without it `import
+# backend.app` raises RuntimeError, not just a 500 on upload. Also pruned alongside starlette.
+fastapi = ">=0.115"
+uvicorn = { version = ">=0.30", extras = ["standard"] }
+python-multipart = ">=0.0.9"
+# Fast JSON for the big /points payload: orjson serializes numpy float32 coords in C and bypasses
+# FastAPI's jsonable_encoder (~50x, 200k pts 760ms -> ~15ms). backend/app.py imports it OPTIONALLY
+# (graceful stdlib fallback), so it is app-only (like fastapi/uvicorn) and lives here, not pyproject -
+# but the deploy gpu-env is built from pyproject, so `uv pip install orjson` into gpu-env on deploy too.
+orjson = ">=3.10"
+
+[environments]
+main = { features = [] }
+
+[tasks]
+smoke = "python -c \"import scanpy, squidpy, anndata, decoupler, celltypist, plotly, datashader; print('main env OK')\""
+serve = "uvicorn backend.app:app --host 0.0.0.0 --port 8000"   # FastAPI: serves webapp/dist + /api
+test = "pytest -q"
+check = "python scripts/check_consistency.py"

@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spatialscribe"
+version = "0.1.0"
+description = "A fast, self-serve spatial-transcriptomics analysis copilot for wet-lab scientists."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Paul Gueguen" }]
+keywords = ["spatial-transcriptomics", "xenium", "scanpy", "squidpy", "claude", "annotation"]
+
+# Core (CPU) dependencies. The GPU accelerator (rapids-singlecell) and the isolated
+# ovrlpy stack are installed via pixi environments, not here (dependency clashes).
+dependencies = [
+    "scanpy>=1.10",
+    "anndata>=0.10",
+    "squidpy>=1.5",
+    "numpy>=1.25",
+    "pandas>=2.0",
+    "polars>=1.0",
+    "pyarrow>=15",
+    "scikit-learn>=1.4",
+    "leidenalg>=0.10",
+    "igraph>=0.11",
+    "decoupler>=2.0",
+    "omnipath>=1.0",
+    "celltypist>=1.6",
+    "hnswlib>=0.8",
+    "plotly>=5.20",
+    "datashader>=0.16",
+    "anthropic>=0.40",
+    "rds2py>=0.10",   # read R RCTD/spacexr Reference .rds files (reference.load_reference .rds path)
+    # QC/annotation metrics engine (github.com/p-gueguen/spatial-anno-metrics), imported at module top
+    # in analysis/{eval_metrics,signal_qc,purity} + spatial.py; MUST be a declared dependency or
+    # qc_funnel / annotate / reference_match fail with ModuleNotFoundError. Declared by NAME so pixi.toml
+    # can supply it as an editable local path for dev - do NOT pin a git URL here: pixi treats a pyproject
+    # URL + the pixi.toml path as conflicting URLs and refuses to resolve. For a plain pip install add it
+    # from git: pip install "spatial-anno-metrics @ git+https://github.com/p-gueguen/spatial-anno-metrics".
+    "spatial-anno-metrics",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+# TACCO OT label transfer - the documented default reference-transfer engine (docs: "TACCO = fast CPU
+# default"). `reference_transfer.transfer_labels` does `import tacco` INSIDE the function, and
+# capabilities.py wraps the arm in a bare try/except that records {"status": "skipped: <exc>"} on any
+# failure. So a missing tacco degrades SILENTLY to the celltypist arm: `pixi run test` passes, the app
+# still annotates, and nothing anywhere says the default engine never ran. Keep it an extra (it pulls
+# MKL via sparse_dot_mkl) but DECLARE it, so the arm is installable and testable by name.
+transfer = ["tacco>=0.5"]
+# Dictate a question to the copilot (backend/stt.py). Optional: without it POST /api/stt 503s and the
+# mic button never renders. Runs on CTranslate2, so it pulls NO torch; PyAV comes with it and decodes
+# the browser's webm/opus in-process, which is what lets this work on nodes with no ffmpeg binary.
+stt = ["faster-whisper>=1.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

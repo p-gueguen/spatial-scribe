@@ -1,0 +1,82 @@
+{
+"CL:0000084": {
+"name": "T cell",
+"id": "CL:0000084",
+"clDescription": "A type of lymphocyte whose defining characteristic is the expression of a T cell receptor complex.",
+"synonyms": [
+"T lymphocyte",
+"T-cell",
+"T-lymphocyte"
+]
+},
+"CL:0000623": {
+"name": "natural killer cell",
+"id": "CL:0000623",
+"clDescription": "A lymphocyte that can spontaneously kill a variety of target cells without prior antigenic activation via germline encoded activation receptors and also regulate immune responses via cytokine release and direct contact with other cells.",
+"synonyms": [
+"NK cell"
+]
+},
+"CL:0000236": {
+"name": "B cell",
+"id": "CL:0000236",
+"clDescription": "A lymphocyte of B lineage that is capable of B cell mediated immunity.",
+"synonyms": [
+"B lymphocyte",
+"B-cell",
+"B-lymphocyte"
+]
+},
+"CL:0000235": {
+"name": "macrophage",
+"id": "CL:0000235",
+"clDescription": "A mononuclear phagocyte present in variety of tissues, typically differentiated from monocytes, capable of phagocytosing a variety of extracellular particulate material, including immune complexes, microorganisms, and dead cells.",
+"synonyms": [
+"histiocyte"
+]
+},
+"CL:0000763": {
+"name": "myeloid cell",
+"id": "CL:0000763",
+"clDescription": "A cell of the monocyte, granulocyte, mast cell, megakaryocyte, or erythroid lineage.",
+"synonyms": []
+},
+"CL:0000057": {
+"name": "fibroblast",
+"id": "CL:0000057",
+"clDescription": "A connective tissue cell which secretes an extracellular matrix rich in collagen and other macromolecules. Flattened and irregular in outline with branching processes; appear fusiform or spindle-shaped.",
+"synonyms": []
+},
+"CL:0000097": {
+"name": "mast cell",
+"id": "CL:0000097",
+"clDescription": "A cell that is found in almost all tissues containing numerous basophilic granules and capable of releasing large amounts of histamine and heparin upon activation. Progenitors leave bone marrow and mature in connective and mucosal tissue. Mature mast cells are found in all tissues, except the bloodstream. Their phenotype is CD117-high, CD123-negative, CD193-positive, CD200R3-positive, and FceRI-high. Stem-cell factor (KIT-ligand; SCF) is the main controlling signal of their survival and development.",
+"synonyms": [
+"histaminocyte",
+"labrocyte",
+"mastocyte"
+]
+},
+"CL:0000148": {
+"name": "melanocyte",
+"id": "CL:0000148",
+"clDescription": "A pigment cell derived from the neural crest. Contains melanin-filled pigment granules, which gives a brown to black appearance.",
+"synonyms": []
+},
+"CL:0000066": {
+"name": "epithelial cell",
+"id": "CL:0000066",
+"clDescription": "A cell that is usually found in a two-dimensional sheet with a free surface. The cell has a cytoskeleton that allows for tight cell to cell contact and for cell polarity where apical part is directed towards the lumen and the basal part to the basal lamina.",
+"synonyms": [
+"epitheliocyte"
+]
+},
+"CL:0000115": {
+"name": "endothelial cell",
+"id": "CL:0000115",
+"clDescription": "An endothelial cell comprises the outermost layer or lining of anatomical structures and can be squamous or cuboidal. In mammals, endothelial cell has vimentin filaments and is derived from the mesoderm.",
+"synonyms": [
+"endotheliocyte"
+]
+}
+}
