@@ -32,6 +32,12 @@ dependencies = [
     "plotly>=5.20",
     "datashader>=0.16",
     "anthropic>=0.40",
+    # FastAPI backend runtime (private dev keeps these in pixi.toml; the public repo ships the
+    # app, so pip/docker need them declared here). python-multipart is required at import time.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "orjson>=3.10",
     "rds2py>=0.10",   # read R RCTD/spacexr Reference .rds files (reference.load_reference .rds path)
     # QC/annotation metrics engine (github.com/p-gueguen/spatial-anno-metrics), imported at module top
     # in analysis/{eval_metrics,signal_qc,purity} + spatial.py; MUST be a declared dependency or
