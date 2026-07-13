@@ -31,7 +31,8 @@ All labels coarsened onto one 6-lineage axis (T/NK, B/Plasma, Myeloid, Endotheli
 | Atera (WTA) breast   | 18,028 |    0.899 | 0.4573 → 0.0042      | **0.4191** |                 0.4790 |         +0.0011 |
 | Atera (WTA) cervical | 18,028 |    0.742 | 0.2751 → 0.0041      | **0.5780** |                 0.5712 |         +0.0167 |
 
-Ground truth: CosMx ships a 49-type annotation; both Atera demos ship 10x expert `cell_groups.csv`
+These are internal validation sections; only the aggregate metrics below are shown, and no raw
+data is redistributed in this repo. Ground truth: CosMx ships a 49-type annotation; both Atera demos ship 10x expert `cell_groups.csv`
 (real cell types, not cluster ids), 99.8% / 99.0% of which map cleanly onto the lineage axis.
 
 ### The ECE headline is largely vacuous

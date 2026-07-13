@@ -12,7 +12,7 @@ Config via env vars (the cluster defaults), so the committed code carries no har
     CANCERFINDER_REPO    - the SequencingCancerFinder checkout (models/ + utils/)
     CANCERFINDER_CKPT    - the pretrained checkpoint (e.g. sc_pretrain_article.pkl)
 
-Caveat (an internal benchmark Atera benchmark): Cancer-Finder is over-sensitive on single-cell Xenium (it agrees
+Caveat (internal Atera benchmark): Cancer-Finder is over-sensitive on single-cell Xenium (it agrees
 with the CNV caller at ~0.98 AUROC but over-calls at a 0.5 threshold) - prefer the probability
 ranking, or raise the threshold.
 """

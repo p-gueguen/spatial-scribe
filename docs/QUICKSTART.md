@@ -53,6 +53,6 @@ pixi run test                   # unit + synthetic end-to-end pipeline
 ## Demo dataset
 
 The example is the public, CC BY 4.0
-[10x FFPE Human Skin Primary Dermal Melanoma (Xenium Prime 5K)](https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-skin).
+[10x FFPE Human Breast (Xenium Prime 5K)](https://www.10xgenomics.com/datasets).
 Point `SPATIALSCRIBE_DEMO_CACHE` at a processed `.h5ad` (build one from a raw download with
 `scripts/build_demo_cache.py`), or load any Xenium output folder / `.h5ad` from the Load step.

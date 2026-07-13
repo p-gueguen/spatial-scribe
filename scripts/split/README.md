@@ -71,7 +71,7 @@ cells; retain-rare-types annotators do better there). Report:
 | on-target signal kept (T cell) | - (type dropped) | 86% (n=8,137) |
 
 Same conclusion, now on a robust 8k-T-cell population. Reports on object storage:
-`https://your-server.example.com/projects/an internal benchmark/Analyses/spatial-scribe/rctd_vs_tacco_split.html`
+`https://your-server.example.com/projects/internal/Analyses/spatial-scribe/rctd_vs_tacco_split.html`
 (10k demo) and `.../rctd_vs_tacco_split_100k.html` (real 100k). Extra recipe step:
 
 - `rctd_result_to_split.py <rctd_result.h5ad> <reference.h5ad> <ref_key> <section.h5ad> <outdir>`

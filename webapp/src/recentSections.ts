@@ -27,7 +27,7 @@ export function clearRecent(): void {
   try { localStorage.removeItem(KEY); } catch { /* ignore */ }
 }
 
-// last two path segments, e.g. "…/an internal project/xenium_output" - full path goes in the row's title tooltip.
+// last two path segments, e.g. "…/internal/xenium_output" - full path goes in the row's title tooltip.
 export function shortPath(p: string): string {
   const parts = p.replace(/\/+$/, "").split("/").filter(Boolean);
   return parts.length <= 2 ? p : "…/" + parts.slice(-2).join("/");

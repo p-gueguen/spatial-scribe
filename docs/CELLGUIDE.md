@@ -95,9 +95,9 @@ supplies the knowledge the small model lacks, and the grounding is auditable (ca
 computational, with a snapshot id) rather than a hallucination.
 
 **Honest caveats before building it:**
-- Some some OpenAI-compatible servers intermittently emit **no `tool_calls`** and degrade to a text answer (seen on
+- Some local-llm vLLM builds intermittently emit **no `tool_calls`** and degrade to a text answer (seen on
   the live deploy; see the grounding-eval note in progress). A lookup tool only helps a backend that
-  reliably tool-calls; verify the deployed server does before relying on it.
+  reliably tool-calls; verify the deployed local-llm build does before relying on it.
 - Panel-check now **augments** curated with CellGuide (union, curated first), it does not replace it.
   `_apply_llm_markers_for_categories` unions CellGuide's canonical markers onto the curated baseline
   for EVERY annotated category, so under-covered curated lineages (Mast 4, NK 4, Endothelial 4 curated

@@ -151,12 +151,12 @@ def test_resolve_server_path_corrects_missing_mount_prefix(tmp_path, monkeypatch
     '/data/projects/...', or an LLM emitting it) still resolves: _resolve_server_path tries the
     known storage roots and returns the first that exists. Nonexistent -> None (load then errors clearly)."""
     from spatialscribe.analysis import capabilities as cap
-    # A fake object storage root: <tmp>/data/projects/an internal project/section
-    real = tmp_path / "srv" / "object storage" / "projects" / "an internal project" / "section"
+    # A fake object storage root: <tmp>/data/projects/internal/section
+    real = tmp_path / "srv" / "object storage" / "projects" / "internal" / "section"
     real.mkdir(parents=True)
     monkeypatch.setattr(cap, "_SERVER_ROOTS", (str(tmp_path / "srv" / "object storage"),))
 
     assert cap._resolve_server_path(str(real)) == str(real)          # already-correct path: returned as-is
-    assert cap._resolve_server_path("/projects/an internal project/section") == str(real)  # prefix dropped -> corrected
-    assert cap._resolve_server_path("/projects/an internal project/nope") is None          # nothing matches -> None
+    assert cap._resolve_server_path("/projects/internal/section") == str(real)  # prefix dropped -> corrected
+    assert cap._resolve_server_path("/projects/internal/nope") is None          # nothing matches -> None
     assert cap._resolve_server_path("") is None

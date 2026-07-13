@@ -12,7 +12,7 @@ Run:
     <cf_python> subprocesses/cancerfinder/run_cancerfinder.py --h5ad section.h5ad --out cf.parquet \
         --repo <SequencingCancerFinder> --ckpt <sc_pretrain_article.pkl> [--threshold 0.5]
 
-Note (from the an internal benchmark Atera benchmark): Cancer-Finder is over-sensitive on single-cell Xenium -
+Note (from the internal Atera benchmark): Cancer-Finder is over-sensitive on single-cell Xenium -
 prefer the ranking (probability / AUROC) over a hard 0.5 threshold, or raise the threshold.
 """
 from __future__ import annotations

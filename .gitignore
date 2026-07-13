@@ -7,7 +7,7 @@ dist/
 __pycache__/
 *.pyc
 
-# Data & caches: only the shipped public demo is tracked (via Git LFS)
+# Data & caches: only the shipped public demo is tracked (a plain ~22MB blob; no Git LFS needed)
 data/*
 !data/demo_public.h5ad
 !data/README.md

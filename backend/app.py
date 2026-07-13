@@ -197,7 +197,7 @@ def _state(s: dict) -> dict:
             "device": _device(),
             "has_key": llm.available(),
             # Which model backs the copilot, so the UI can show it. provider "openai" = a local /
-            # self-hosted OpenAI-compatible endpoint (e.g. our vLLM a local model); "anthropic" = the API.
+            # self-hosted OpenAI-compatible endpoint (e.g. our vLLM local-llm); "anthropic" = the API.
             "llm": {"available": llm.available(), "provider": llm.provider(),
                     "model": (llm.default_model() or None),
                     "providers": llm.providers_available()},   # >1 -> the UI model tag is a toggle

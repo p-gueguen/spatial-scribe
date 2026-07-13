@@ -9,7 +9,7 @@ Config - two interchangeable backends, chosen by environment (endpoint-agnostic)
 * **Anthropic** (default): ``ANTHROPIC_API_KEY`` [+ ``ANTHROPIC_MODEL``, default Haiku].
 * **OpenAI-compatible** (any ``/v1`` server - a self-hosted vLLM/TGI/Ollama endpoint, or
   OpenAI itself): set ``SPATIALSCRIBE_LLM_BASE_URL`` (e.g. ``http://<your-vllm-host>:8000/v1``),
-  ``SPATIALSCRIBE_LLM_MODEL`` (e.g. ``Qwen3.6-35B-A3B-FP8``), and optionally
+  ``SPATIALSCRIBE_LLM_MODEL`` (e.g. ``local-llm``), and optionally
   ``SPATIALSCRIBE_LLM_API_KEY`` (default ``dummy`` - vLLM ignores it). When the base URL is
   set it takes precedence over Anthropic. No extra SDK: we POST ``/chat/completions`` with httpx.
 """
@@ -148,7 +148,7 @@ def complete(system: str, user: str, max_tokens: int = 1024, model: str | None =
     """Single-turn completion; returns the assistant text. Dispatches to the active backend.
 
     ``json_mode`` asks OpenAI-compatible servers for a strict JSON object (``response_format``) -
-    important for reasoning models like a local model that otherwise wrap or truncate JSON; it is a no-op on
+    important for reasoning models like local-llm that otherwise wrap or truncate JSON; it is a no-op on
     Anthropic (the prompts already request JSON and ``_parse_json`` is defensive either way).
 
     Cost (Anthropic): the system prompt is sent as a cache-control 'ephemeral' block so prompt
@@ -232,7 +232,7 @@ def _openai_msgs(system: str, messages: list) -> list:
 _TOOLCALL_TAG = re.compile(r"<tool_call>\s*(.+?)\s*</tool_call>", re.DOTALL)
 _TOOLCALL_FENCE = re.compile(r"```(?:json|tool_call|python|tool_code)?\s*(.+?)\s*```", re.DOTALL)
 _FUNCTION_TAG = re.compile(r"<function>\s*([\w.-]+)\s*</function>", re.DOTALL)
-# vLLM/a local model "pythonic" tool markup: <function=NAME> <parameter name="KEY" ...>VALUE</parameter> ... </function>
+# vLLM/local-llm "pythonic" tool markup: <function=NAME> <parameter name="KEY" ...>VALUE</parameter> ... </function>
 # (also the <parameter=KEY>VALUE</parameter> attribute-less variant). vLLM leaves this in the content
 # when its tool-call parser is off/mismatched, with NO structured tool_calls field.
 _FUNCTION_EQ = re.compile(r"<function=([\w.-]+)\s*>(.*?)(?=</function>|<function=|$)", re.DOTALL)
@@ -242,7 +242,7 @@ _PARAM_TAG = re.compile(r"<parameter(?:\s+name=[\"']?([\w.-]+)[\"']?[^>]*|=([\w.
 def _recover_tool_calls(text: str, valid_names: set) -> list:
     """Recover tool calls a model emitted as PROSE MARKUP instead of the OpenAI ``tool_calls`` field.
 
-    The the cluster vLLM's function-calling silently stops emitting structured ``tool_calls`` at some
+    The vLLM's function-calling silently stops emitting structured ``tool_calls`` at some
     (serving-config-dependent, per-reload) schema size and instead prints the call as text -
     ``<tool_call>{...}</tool_call>``, a ```json fenced ``{"tool_name"/"name": ..., "arguments": ...}``
     block, or ``<function>NAME</function>`` - which the client would otherwise surface to the user as
@@ -282,7 +282,7 @@ def _recover_tool_calls(text: str, valid_names: set) -> list:
                     args = {}
             if name in valid_names and isinstance(args, dict):
                 out.append({"id": f"recovered-{len(out)}", "name": name, "input": args})
-    # <function>NAME</function> form (a local model tool-code): the args are a trailing JSON object, if any.
+    # <function>NAME</function> form (local-llm tool-code): the args are a trailing JSON object, if any.
     if not out:
         for m in _FUNCTION_TAG.finditer(text):
             name = m.group(1)
@@ -297,7 +297,7 @@ def _recover_tool_calls(text: str, valid_names: set) -> list:
                     args = {}
             out.append({"id": f"recovered-{len(out)}", "name": name,
                         "input": args if isinstance(args, dict) else {}})
-    # <function=NAME><parameter name="KEY">VALUE</parameter>...</function> form (the a local model vLLM's
+    # <function=NAME><parameter name="KEY">VALUE</parameter>...</function> form (the local-llm vLLM's
     # actual leak: seen live emitting a load_section call as this markup with no tool_calls field).
     if not out:
         for fm in _FUNCTION_EQ.finditer(text):

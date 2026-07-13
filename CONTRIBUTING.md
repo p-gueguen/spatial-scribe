@@ -92,8 +92,7 @@ register copilot tools anywhere else.
 (the suite mocks the LLM; routing lives in the model and is provider-specific). After you add or
 change a `copilot_exposed` tool's `name` / `description` / `params`, run the per-provider routing
 regression and confirm both the new intent routes AND the neighbours still do:
-`pixi run python an internal LLM smoke-check --provider qwen` (and `--provider anthropic`). See
-docs/LLM_EVAL.md.
+check routing manually against your own LLM provider (the test suite mocks the LLM).
 
 **Annotation-quality scores are not yours to reimplement.** All spatial cell-type
 annotation-quality metrics live in the separate `spatial-anno-metrics` package (a git-URL
@@ -143,33 +142,6 @@ no credentials**.
   ([github.com/p-gueguen/spatial-anno-metrics](https://github.com/p-gueguen/spatial-anno-metrics));
   contribute metric changes there, not to the re-export shims here.
 
-## Progress tracking
-
-`PROGRESS.html` is a **generated** dashboard - do not hand-edit it. Edit the source of truth
-`progress.yaml` and regenerate:
-
-```bash
-python the progress renderer            # progress.yaml -> PROGRESS.html
-python the progress renderer --check    # exit 1 if PROGRESS.html is stale (CI gate)
-```
-
-Section percentages and progress bars are computed from each card's one-word `status`
-(`done` / `partial` / `todo` / `roadmap`); never write percentages by hand.
-
-The architecture docs are generated the same way, but from the **live code** rather than a YAML
-file: `scripts/render_architecture.py` reads `capabilities.REGISTRY` and the `analysis/*.py`
-docstrings, then writes `docs/CODE_ARCHITECTURE.html`, the module fence in `docs/ARCHITECTURE.md`,
-the `<!-- generated:modules -->` block in `CLAUDE.md`, and the full capability catalog at
-`.claude/skills/spatialscribe/references/capabilities.md`.
-
-```bash
-python scripts/render_architecture.py          # regenerate all three
-python scripts/render_architecture.py --check  # exit 1 if any is stale (CI gate)
-```
-
-Both generators run automatically via a `PostToolUse` hook in `.claude/settings.json` when an agent
-saves `progress.yaml` or `src/spatialscribe/analysis/*.py`, and `tests/test_render_architecture.py`
-gates the committed outputs. Add a capability and the docs follow; you never update a count by hand.
 
 ## PR checklist
 
@@ -179,8 +151,6 @@ Before opening a pull request, confirm:
 - [ ] `pixi run check` passes if you touched datasets, thresholds, or QC invariants.
 - [ ] New analysis logic lives in `analysis/` (not in a UI), with heavy imports inside functions.
 - [ ] New capabilities are registered in `capabilities.py` and any new keys are declared in `keys.py`.
-- [ ] If you added/reworded a `copilot_exposed` tool: `an internal LLM smoke-check --provider qwen` (and
-      `--provider anthropic`) still green - the new intent routes and no neighbour regressed.
 - [ ] New behavior has tests; a bug fix has a regression test that failed before the fix.
 - [ ] No internal paths or credentials committed; concrete paths come from env vars with empty
       public defaults. Leak scan is clean.

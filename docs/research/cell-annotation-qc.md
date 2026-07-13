@@ -193,7 +193,7 @@ The purity gate. A cell can pass Layers 0–2 (real segment, plenty of counts) a
 These quantify how often *mutually-exclusive* lineage markers appear in the same cell — a direct readout of spillover:
 
 - **MECR — Mutually Exclusive Co-expression Rate** (Hartman & Satija, 2024): for a pair of markers from **disjoint lineages**, MECR = `#(both > 0) / #(either > 0)`. Averaged over lineage pairs it is a **dataset-level, panel-arm-independent** contamination score. Lower is cleaner. Used as the platform-comparison and purification-benchmark yardstick.
-- **CRISP purity** (Center for Spatial OMICs): the **per-cell** extension of MECR — a marker-positive cell is *impure* if it detects markers from ≥2 disjoint lineages; `purity = 1 − N_impure / N_marker+`. Cell-resolved, so it can gate individual cells. (In our an internal project CosMx benchmark, CRISP purity rose **0.27 → 0.99 after SPLIT**, independently confirming a ~270× MECR improvement — evidence that these metrics track real contamination and that purification works.)
+- **CRISP purity** (Center for Spatial OMICs): the **per-cell** extension of MECR — a marker-positive cell is *impure* if it detects markers from ≥2 disjoint lineages; `purity = 1 − N_impure / N_marker+`. Cell-resolved, so it can gate individual cells. (In our internal CosMx benchmark, CRISP purity rose **0.27 → 0.99 after SPLIT**, independently confirming a ~270× MECR improvement — evidence that these metrics track real contamination and that purification works.)
 - **PMP — Positive Marker Purity**: per-cell fraction of a cell's transcripts that come from its *assigned* type's marker set. Needs per-type marker sets; complements CRISP.
 - **NCP — Negative Co-expression Purity** (Salas et al., *Nat Methods* 2025): the **percentage of gene pairs that are *not* co-expressed in a matched scRNA-seq reference and remain non-co-expressed in situ**. Scale 0–1, **higher = better specificity** (near 0 = many reference-exclusive pairs now co-occur → contamination). All commercial platforms in that study showed **mean NCP > 0.8**, making **≈0.8 a reasonable dataset-level "good specificity" line**. NCP is *reference-anchored* (needs a matched scRNA-seq dataset) — complementary to MECR, which needs only disjoint-lineage marker pairs.
 - **NMP — Negative Marker Purity** (Salas et al., *Nat Methods* 2025): the **percentage of reads from "negative markers" (genes a cell type should NOT express) found in cells assigned to that type**. It is the most direct readout of **segmentation-driven mis-assignment / spillover into annotations** and is the metric they recommend for *comparing segmentation strategies*. Lower = cleaner. Per-cell-type and dataset-level.
@@ -441,7 +441,7 @@ Key properties:
 | Layer 0 section thresholds | `analysis/qc.py` (`XENIUM_THRESHOLDS`, `qc_summary`, `_flag`) | ✅ implemented |
 | Layer 1–2 per-cell filters | `analysis/qc.py` (`compute_qc`, `DEFAULT_FILTER`, `apply_filter`) | ✅ implemented (extend with cell-area, single-gene-dominance) |
 | Region QC (H1) | `analysis/qc.py` (`region_qc`) | ✅ implemented |
-| Layer 3 contamination metrics (MECR/CRISP/PMP) | **new** `analysis/purity.py` (proposed) | ⬜ to build — port from `rctd-py/atera/cosmx_run/compute_extra_metrics.py` |
+| Layer 3 contamination metrics (MECR/CRISP/PMP) | **new** `analysis/purity.py` (proposed) | ⬜ to build — port from `an internal benchmark script` |
 | Layer 3 VSI | `subprocesses/ovrlpy/run_ovrlpy.py` + join | ◻ scaffolded (H5) |
 | Layer 4 panel adequacy | `analysis/panel_check.py` (`check_panel`) | ✅ implemented |
 | Layer 5 annotation + confidence | **new** `analysis/annotate.py` (multi-method + consensus + calibrated confidence + abstention) | ⬜ to build — **this document is its QC spec; [`annotation-method-selection.md`](annotation-method-selection.md) is its method-choice spec** (SingleR/RCTD defaults, reference > method, no zero-shot FMs) |
@@ -528,11 +528,11 @@ Xenium is the primary target, but SpatialScribe also ingests CosMx and Atera dat
 - Reference-based annotation with native confidence signals: **CellTypist**, **SingleR**, **Cell2location**, **Tangram**, **SpaGE** (imputation).
 - Platform refs: **Xenium** (Janesick et al.), **MERFISH/MERSCOPE** (Chen/Moffitt et al.), **CosMx** (He et al.).
 
-### 17.3 the cluster-internal sources
+### 17.3 internal sources
 
 - `the 10x section-level QC thresholds` — the section-level 10x thresholds mirrored in `qc.py`.
-- an internal project CosMx SPLIT benchmark: `rctd-py/atera/cosmx_run/compute_extra_metrics.py` (CRISP 0.27→0.99 post-SPLIT; MECR ~270×).
-- `reference_spatial_annotation_qc_metrics` memory — the cheap-vs-needs-extra-data metric-feasibility taxonomy.
+- internal CosMx SPLIT benchmark: `an internal benchmark script` (CRISP 0.27→0.99 post-SPLIT; MECR ~270×).
+- `an internal QC-metric note` memory — the cheap-vs-needs-extra-data metric-feasibility taxonomy.
 
 > **Verification status.** The numeric claims above were checked by an adversarial-verification research pass (6 search angles, 24 sources fetched, 113 claims extracted → **25 verified: 23 confirmed, 2 refuted-and-excluded**, 12 synthesized). The **2 refuted** claims are deliberately **not** asserted here: (a) an "NCP ≈ 0.8 warn/fail threshold" *misattributed to the SPLIT paper* — NCP and its >0.8 line come only from Salas et al. (PMC11978515), which this doc cites correctly; and (b) a "Xenium ~2× CosMx / ~20× MERSCOPE sensitivity ceiling" claim, which failed verification — so no cross-platform sensitivity *ratio* is hard-coded. Separately, the NCP-terminology trap (negative *control probe* rate ≠ negative *co-expression* purity) is kept explicit throughout. Only one headline number — the **~60% Prime-5K QC-fail** — rested on a split (2-1) vote; treat it as strong-but-single-source. Citation venues/years for §17.2 items are from working knowledge + the metric taxonomy and should be link-verified before external publication.
 </invoke>

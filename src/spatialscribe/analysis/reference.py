@@ -288,7 +288,7 @@ def tissue_consistency(query_tissue: str, reference) -> dict:
 # concrete on-disk reference PATH for each entry is read from an env var with an empty default, so a
 # committed public checkout has NO site-specific paths (an unset entry simply ranks by keyword and
 # shows as unavailable). Set SPATIALSCRIBE_REF_<KEY> for a single reference, or point
-# $SPATIALSCRIBE_REFERENCE_REGISTRY at a YAML (merged over these) to repoint many at once. The the cluster
+# $SPATIALSCRIBE_REFERENCE_REGISTRY at a YAML (merged over these) to repoint many at once. The
 # locations for these atlases are inventoried in docs/DATASETS.md, not hardcoded here.
 REFERENCE_REGISTRY: dict[str, dict] = {
     "breast": {

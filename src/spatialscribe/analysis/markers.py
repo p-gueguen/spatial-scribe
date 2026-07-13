@@ -35,7 +35,7 @@ LINEAGE_MARKERS: dict[str, list[str]] = {
     "Glial/Neural": ["PLP1", "S100B", "MBP", "GFAP"],
 }
 
-# Macrophage / TAM states (an internal project) - orthogonal states within the Myeloid lineage.
+# Macrophage / TAM states (internal) - orthogonal states within the Myeloid lineage.
 # Kept for `panel_check._load_marker_db`'s curated fallback and `demo.py`, but NO LONGER part of the
 # default cell-state set (`states.score_states` now defaults to CELL_STATES only): the three TAM
 # programs are Myeloid-only, so they were dead weight on non-myeloid sections. CELL_STATES below

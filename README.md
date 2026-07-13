@@ -45,7 +45,7 @@ A three-pane web app (React + FastAPI + deck.gl) over one shared analysis engine
 - **Fast & scalable** - GPU-accelerated (rapids-singlecell) with a CPU fallback; scales to
   10^5-10^6 cell sections.
 - **Reproducible** - exports an annotated `.h5ad`, a self-contained HTML report, and a re-runnable
-  notebook that regenerates the whole analysis.
+  Python script that regenerates the whole analysis.
 
 ## Quickstart
 
@@ -118,7 +118,7 @@ flowchart TD
 
     REG --> QC["QC funnel"] --> PANEL["panel-adequacy check"] --> REFM["reference match"] --> GATE{"annotation strategy"}
     GATE --> CLUSTER["cluster"] --> ANNOT["annotate + confidence / abstention"] --> NICHE["spatial niches"] --> MAL["malignant calling (tumour-gated)"]
-    MAL --> OUT[/"annotated .h5ad + self-contained HTML report + re-runnable notebook"/]
+    MAL --> OUT[/"annotated .h5ad + self-contained HTML report + re-runnable script"/]
 ```
 
 The same spine runs headless - one command, folder to report:

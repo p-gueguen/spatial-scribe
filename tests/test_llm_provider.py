@@ -16,11 +16,11 @@ def test_provider_defaults_to_anthropic(monkeypatch):
 
 def test_openai_base_url_takes_precedence(monkeypatch):
     monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://localhost:8000/v1/")
-    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "a smaller local model-FP8")
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "local-llm")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")  # present, but base URL wins
     assert llm.provider() == "openai"
     assert llm.available() is True
-    assert llm.default_model() == "a smaller local model-FP8"
+    assert llm.default_model() == "local-llm"
     assert llm._openai_base() == "http://localhost:8000/v1"  # trailing slash trimmed
 
 
@@ -53,10 +53,10 @@ _LS_TOOLS = [{"name": "load_section", "description": "load a section",
 
 
 def test_openai_tool_chat_recovers_toolcall_from_fenced_markup(monkeypatch):
-    # The the cluster vLLM intermittently emits the call as PROSE (a ```json block) with tool_calls EMPTY.
+    # The vLLM intermittently emits the call as PROSE (a ```json block) with tool_calls EMPTY.
     # The client must recover it into a structured call so the copilot runs the tool, not echoes markup.
     monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://x/v1")
-    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "a local model")
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "local-llm")
     markup = ('I will load the mouse brain data.\n```json\n'
               '{"tool_name": "load_section", "arguments": {"path": "/data/sec"}}\n```')
     monkeypatch.setattr(llm, "_openai_post", _fake_post(markup, tool_calls=[]))
@@ -72,7 +72,7 @@ def test_openai_tool_chat_recovers_toolcall_from_fenced_markup(monkeypatch):
 
 def test_openai_tool_chat_recovers_toolcall_from_tag_markup(monkeypatch):
     monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://x/v1")
-    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "a local model")
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "local-llm")
     markup = 'thinking...\n<tool_call>\n{"name": "describe_sample", "arguments": {}}\n</tool_call>'
     monkeypatch.setattr(llm, "_openai_post", _fake_post(markup, tool_calls=[]))
     turn = llm.tool_chat("SYS", [{"role": "user", "content": "describe"}], _LS_TOOLS)
@@ -83,7 +83,7 @@ def test_openai_tool_chat_does_not_hijack_plain_json_answer(monkeypatch):
     # A normal answer that merely CONTAINS JSON (naming no tool) must stay a text answer, not be
     # mis-parsed into a phantom tool call.
     monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://x/v1")
-    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "a local model")
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "local-llm")
     monkeypatch.setattr(llm, "_openai_post", _fake_post('The section has {"n_cells": 5} cells.', []))
     turn = llm.tool_chat("SYS", [{"role": "user", "content": "how many?"}], _LS_TOOLS)
     assert turn["tool_calls"] == []
@@ -93,7 +93,7 @@ def test_openai_tool_chat_does_not_hijack_plain_json_answer(monkeypatch):
 def test_openai_tool_chat_prefers_structured_calls_when_present(monkeypatch):
     # When the server DOES return structured tool_calls, they win untouched (no markup scan).
     monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://x/v1")
-    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "a local model")
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "local-llm")
     tc = [{"id": "c1", "type": "function",
            "function": {"name": "load_section", "arguments": '{"path": "/p"}'}}]
     monkeypatch.setattr(llm, "_openai_post", _fake_post("", tool_calls=tc))
@@ -124,7 +124,7 @@ def _fake_openai(content, tool_calls=None):
 
 
 def test_openai_prose_tool_call_is_recovered_not_leaked(monkeypatch):
-    # The the cluster a local model vLLM sometimes emits its call as PROSE in content (Hermes JSON) instead of a
+    # The local-llm vLLM sometimes emits its call as PROSE in content (Hermes JSON) instead of a
     # structured tool_calls array. It must be recovered (so the tool actually runs) and the raw
     # <tool_call> markup must never reach the user as an "answer".
     monkeypatch.setattr(llm, "provider", lambda: "openai")
@@ -156,14 +156,14 @@ def test_provider_override_toggles_between_configured_backends(monkeypatch):
     # a CONFIGURED backend, with $SPATIALSCRIBE_LLM_PROVIDER as the default.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://vllm:8081/v1")
-    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "Qwen3-X")
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "local-llm")
     monkeypatch.setenv("SPATIALSCRIBE_LLM_PROVIDER", "anthropic")
     try:
         llm.set_provider(None)                                          # start clean
         assert set(llm.providers_available()) == {"anthropic", "openai"}
         assert llm.provider() == "anthropic" and llm.default_model() == llm._ANTHROPIC_DEFAULT
         assert llm.set_provider("openai") is True
-        assert llm.provider() == "openai" and llm.default_model() == "Qwen3-X"
+        assert llm.provider() == "openai" and llm.default_model() == "local-llm"
         assert llm.set_provider("bogus") is False and llm.provider() == "openai"   # invalid -> no-op
         monkeypatch.delenv("SPATIALSCRIBE_LLM_BASE_URL")
         llm.set_provider(None)
@@ -180,12 +180,12 @@ def test_openai_function_equals_parameter_markup_is_recovered(monkeypatch):
     monkeypatch.setattr(llm, "provider", lambda: "openai")
     monkeypatch.setattr(llm, "_openai_post", lambda *a, **k: _fake_openai(
         'I\'ll load that section.\n<function=load_section>\n'
-        '<parameter name="path" schema="string">/data/projects/an internal benchmark/xenium_out/Region_1</parameter>\n'
+        '<parameter name="path" schema="string">/data/projects/internal/xenium_out/Region_1</parameter>\n'
         '</function>'))
     out = llm.tool_chat("sys", [{"role": "user", "content": "load /data"}],
                         [{"name": "load_section", "description": "", "input_schema": {}}])
     assert [c["name"] for c in out["tool_calls"]] == ["load_section"]
-    assert out["tool_calls"][0]["input"]["path"] == "/data/projects/an internal benchmark/xenium_out/Region_1"
+    assert out["tool_calls"][0]["input"]["path"] == "/data/projects/internal/xenium_out/Region_1"
     assert "<parameter" not in out["text"] and "<function=" not in out["text"]   # markup never leaks
 
 
@@ -202,7 +202,7 @@ def test_openai_unparseable_tool_call_markup_is_stripped_not_leaked(monkeypatch)
 
 
 def test_openai_dangling_closing_toolcall_tag_is_not_leaked(monkeypatch):
-    # A per-reload a local model vLLM state emitted a load_section call as LOOSE PROSE with a DANGLING </tool_call>
+    # A per-reload local-llm vLLM state emitted a load_section call as LOOSE PROSE with a DANGLING </tool_call>
     # close tag - no opening tag, no JSON, no <function> tags (the exact shape a user reported leaking:
     # "...Region_1__20260306__134108 load_section </tool_call>"). The old strip only removed OPENING
     # <tool_call> tags and complete blocks, so the close tag AND the call-as-prose residue leaked verbatim.
