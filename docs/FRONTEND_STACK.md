@@ -35,7 +35,7 @@ solo dev on a deadline, and a heavier long-term maintenance/skills burden for a 
 | Floating HUD over the canvas | Streamlit can't overlay widgets on a chart | yes (absolute positioning in-component) |
 | Rail tracker / bespoke layout | limited widget composition | (solved here with CSS on buttons) |
 | Copilot-drives-map rerun juggling | whole-script reruns, session lag | yes (client-held view state) |
-| 1M-cell rendering + snappy lasso | Plotly WebGL + rerun round-trips | yes (deck.gl, client-side interaction) |
+| 1M-cell rendering + snappy box-select | Plotly WebGL + rerun round-trips | yes (deck.gl, client-side interaction) |
 
 The pain is concentrated in the **viewport**. Forms, the wizard, tables and the chat are fine in
 Streamlit. So the surgical fix is a viewport component, not a stack change.
@@ -44,7 +44,7 @@ Streamlit. So the surgical fix is a viewport component, not a stack change.
 
 - `frontend/` - React + Vite + deck.gl + `streamlit-component-lib`. Renders the cells as a deck.gl
   `ScatterplotLayer` (WebGL, scales past 10^6 points), with a floating glass HUD *in the component*
-  (trivial in React) and native zoom/pan. Lasso/box selection posts the selected cell indices back
+  (trivial in React) and native zoom/pan. box selection posts the selected cell indices back
   to Python via `Streamlit.setComponentValue` - preserving the H1 region-QC round-trip.
 - `app/specimen_deck.py` - `declare_component(...)` wrapper: `render(adata, color_by) -> selection`.
 - NOTE (2026-07-09): superseded. Streamlit was removed; the deck.gl WebGL canvas is now the ONLY
@@ -62,7 +62,7 @@ interaction, copilot-driven recolour without reruns) at ~20% of a rewrite, and e
 - **Backend:** FastAPI wrapping the existing capability registry + a session/task layer, with
   SSE/WebSocket for streaming copilot tokens and SLURM/GPU job progress.
 - **Viewport:** the WebGL scatter primitive - **regl-scatterplot** (purpose-built for millions of 2D
-  points with native lasso + categorical/continuous colouring; basically made for single-cell
+  points with native box-select + categorical/continuous colouring; basically made for single-cell
   embeddings) or **deck.gl** `ScatterplotLayer` (more general, GPU picking, easy to add boundary /
   niche layers). Phase 1 already uses deck.gl; benchmark regl-scatterplot for the pure-embedding case
   if the viewport becomes the sole focus. For a whole multi-view framework (linked views + Zarr

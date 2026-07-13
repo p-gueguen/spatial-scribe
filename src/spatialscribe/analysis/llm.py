@@ -148,7 +148,7 @@ def complete(system: str, user: str, max_tokens: int = 1024, model: str | None =
     """Single-turn completion; returns the assistant text. Dispatches to the active backend.
 
     ``json_mode`` asks OpenAI-compatible servers for a strict JSON object (``response_format``) -
-    important for reasoning models like Qwen that otherwise wrap or truncate JSON; it is a no-op on
+    important for reasoning models like a local model that otherwise wrap or truncate JSON; it is a no-op on
     Anthropic (the prompts already request JSON and ``_parse_json`` is defensive either way).
 
     Cost (Anthropic): the system prompt is sent as a cache-control 'ephemeral' block so prompt
@@ -232,7 +232,7 @@ def _openai_msgs(system: str, messages: list) -> list:
 _TOOLCALL_TAG = re.compile(r"<tool_call>\s*(.+?)\s*</tool_call>", re.DOTALL)
 _TOOLCALL_FENCE = re.compile(r"```(?:json|tool_call|python|tool_code)?\s*(.+?)\s*```", re.DOTALL)
 _FUNCTION_TAG = re.compile(r"<function>\s*([\w.-]+)\s*</function>", re.DOTALL)
-# vLLM/Qwen "pythonic" tool markup: <function=NAME> <parameter name="KEY" ...>VALUE</parameter> ... </function>
+# vLLM/a local model "pythonic" tool markup: <function=NAME> <parameter name="KEY" ...>VALUE</parameter> ... </function>
 # (also the <parameter=KEY>VALUE</parameter> attribute-less variant). vLLM leaves this in the content
 # when its tool-call parser is off/mismatched, with NO structured tool_calls field.
 _FUNCTION_EQ = re.compile(r"<function=([\w.-]+)\s*>(.*?)(?=</function>|<function=|$)", re.DOTALL)
@@ -282,7 +282,7 @@ def _recover_tool_calls(text: str, valid_names: set) -> list:
                     args = {}
             if name in valid_names and isinstance(args, dict):
                 out.append({"id": f"recovered-{len(out)}", "name": name, "input": args})
-    # <function>NAME</function> form (Qwen tool-code): the args are a trailing JSON object, if any.
+    # <function>NAME</function> form (a local model tool-code): the args are a trailing JSON object, if any.
     if not out:
         for m in _FUNCTION_TAG.finditer(text):
             name = m.group(1)
@@ -297,7 +297,7 @@ def _recover_tool_calls(text: str, valid_names: set) -> list:
                     args = {}
             out.append({"id": f"recovered-{len(out)}", "name": name,
                         "input": args if isinstance(args, dict) else {}})
-    # <function=NAME><parameter name="KEY">VALUE</parameter>...</function> form (the Qwen vLLM's
+    # <function=NAME><parameter name="KEY">VALUE</parameter>...</function> form (the a local model vLLM's
     # actual leak: seen live emitting a load_section call as this markup with no tool_calls field).
     if not out:
         for fm in _FUNCTION_EQ.finditer(text):

@@ -1,7 +1,7 @@
 """Plotting - the interactive spatial canvas (plotly) + static report figures.
 
 `spatial_figure` returns a WebGL scatter (handles 10^5-10^6 cells) plus the index array
-mapping plotted points back to ``adata`` positions - so a lasso selection's
+mapping plotted points back to ``adata`` positions - so a box-select selection's
 ``point_indices`` resolve to real cells (see docs: stable-index requirement). Shared by
 the Streamlit app and the HTML report.
 
@@ -130,7 +130,7 @@ def spatial_figure(adata, color_by: str, max_points: int = 400_000, point_size: 
             customdata=idx,
         ))
     fig.update_layout(
-        height=height, dragmode="lasso", showlegend=True,
+        height=height, dragmode="box-select", showlegend=True,
         margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(scaleanchor="x", scaleratio=1),
         legend=dict(itemsizing="constant", x=0.997, y=0.997, xanchor="right", yanchor="top",
                     bgcolor="rgba(8,11,16,.66)", bordercolor="#1d2531", borderwidth=1,

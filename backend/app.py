@@ -197,7 +197,7 @@ def _state(s: dict) -> dict:
             "device": _device(),
             "has_key": llm.available(),
             # Which model backs the copilot, so the UI can show it. provider "openai" = a local /
-            # self-hosted OpenAI-compatible endpoint (e.g. our vLLM Qwen); "anthropic" = the API.
+            # self-hosted OpenAI-compatible endpoint (e.g. our vLLM a local model); "anthropic" = the API.
             "llm": {"available": llm.available(), "provider": llm.provider(),
                     "model": (llm.default_model() or None),
                     "providers": llm.providers_available()},   # >1 -> the UI model tag is a toggle
@@ -848,13 +848,13 @@ class IdxReq(BaseModel):
 
 @app.post("/api/{sid}/region_qc")
 def region_qc_ep(sid: str, req: IdxReq):
-    """QC summary for a lasso/box-selected region (H1) vs the whole section."""
+    """QC summary for a box-selected region (H1) vs the whole section."""
     s = _sess(sid); a = s["adata"]
     from spatialscribe.analysis import qc as _qc
     idx = [int(i) for i in req.indices if 0 <= int(i) < a.n_obs]
     if not idx:
         raise HTTPException(400, "empty region selection")
-    if "total_counts" not in a.obs:   # QC not computed yet (e.g. lasso before the QC step) -> ensure it
+    if "total_counts" not in a.obs:   # QC not computed yet (e.g. box-select before the QC step) -> ensure it
         try:
             cap.run(a, "compute_qc", {}, _ctx(s))
         except Exception:

@@ -47,7 +47,7 @@ which the closed vocabulary now deletes outright - and the remaining **15 were r
 nothing adjudicates**. Agreement with the CellTypist proxy (0.457 / 0.510) sits at or below its own
 **~0.48 majority-class baseline**, so that proxy cannot say who is right. Absent evidence that the
 LLM beats the argmax, a conflict is *flagged*, not silently resolved. Measured live on Prime 5K:
-Qwen named 2 of 9 clusters `Myeloid`/`Endothelial` where the markers said `T cell`.
+a local model named 2 of 9 clusters `Myeloid`/`Endothelial` where the markers said `T cell`.
 
 Closing the vocabulary makes a **missing lineage a real cost**: audit the tissue dict first. Adding a
 lineage is free on panels that cannot see it - `markers.present()` drops any lineage whose markers are

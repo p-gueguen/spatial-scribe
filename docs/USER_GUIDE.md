@@ -16,7 +16,7 @@ insight, in plain language. The app has three panes: the **wizard** (left), the
    is the honest guardrail: it never offers a label the panel can't support.
 
 3. **QC** - section quality metrics vs the/10x thresholds, plus **region QC**:
-   lasso-select any area on the map to get QC just for that region, and exclude bad regions
+   box-select-select any area on the map to get QC just for that region, and exclude bad regions
    (folds, necrosis) from the analysis.
 
 4. **Cluster** - Leiden clustering (GPU-accelerated when available); pick a resolution.
@@ -27,7 +27,7 @@ insight, in plain language. The app has three panes: the **wizard** (left), the
    `Novel`) instead of a made-up label. The **annotatability headline** shows what fraction
    is confidently typed vs abstained. Expand **cell-type × cell-state** to see which
    lineages are cycling / interferon-activated / hypoxic. **Click a cell type on the map,
-   lasso it, and subcluster** it into subtypes (Claude names them with a key set).
+   box-select it, and subcluster** it into subtypes (Claude names them with a key set).
 
 6. **Spatial + niches** - ask *are the T cells excluded from the tumor?* (neighborhood
    enrichment z-score + verdict), see the full neighborhood-enrichment heatmap, and call

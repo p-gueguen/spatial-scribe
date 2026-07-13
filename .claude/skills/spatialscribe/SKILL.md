@@ -19,6 +19,9 @@ This skill teaches you to **drive** SpatialScribe's engine; it does not reimplem
 
 ## Install (user's own environment)
 
+> All commands below are run from the **repo root** (`git clone` it, then `cd spatial-scribe`).
+> The helper scripts live in `scripts/` (`run.py`, `ask.py`, `install.sh`, `launch_app.sh`).
+
 ```bash
 bash scripts/install.sh            # clone + pixi install -e main (or pip -e .) + verify
 export ANTHROPIC_API_KEY=sk-...    # never commit it; ANTHROPIC_MODEL=claude-sonnet-5 optional (default Haiku)
@@ -77,7 +80,7 @@ It is a whitelisted tool-use loop over the capability registry (NOT arbitrary ex
 ```bash
 bash scripts/launch_app.sh        # React SPA + FastAPI (single-origin) -> http://localhost:8000
 ```
-Right surface when the user wants to lasso regions, click-to-subcluster, or browse - not for scripted batch runs.
+Right surface when the user wants to box-select regions, click-to-subcluster, or browse - not for scripted batch runs.
 
 ## Grounding and honesty (do not violate)
 

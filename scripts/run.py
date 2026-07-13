@@ -1,6 +1,7 @@
 """Headless CLI for the full SpatialScribe analysis spine.
 
-    python -m scripts.run --section PATH --out DIR [--tissue TXT] [--tumour] \
+    python scripts/run.py --demo --out DIR                 # synthetic section, no data needed
+    python scripts/run.py --section PATH --out DIR [--tissue TXT] [--tumour|--no-tumour] \
                           [--resolution R] [--reference REF.h5ad [--ref-label-key COL]] \
                           [--rctd] [--split]
 
@@ -27,15 +28,21 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="spatialscribe-run",
                                  description="Run the full SpatialScribe analysis spine headlessly.")
-    ap.add_argument("--section", required=True,
-                    help="server-side path: a Xenium/CosMx/MERSCOPE output folder or a .h5ad")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--section", "--path", dest="section", default=None,
+                     help="server-side path: a Xenium/CosMx/MERSCOPE output folder or a .h5ad")
+    src.add_argument("--demo", action="store_true",
+                     help="run on the built-in synthetic melanoma section (no data files needed)")
     ap.add_argument("--out", required=True,
                     help="output directory (annotated.h5ad + report.html + rerun.py + run.json)")
     ap.add_argument("--tissue", default="",
                     help="tissue context; blank = infer from the panel metadata (parity with the app)")
-    ap.add_argument("--tumour", action="store_true",
-                    help="the sample contains malignant cells (drives the malignant gate). "
-                         "Omit to fall back to the tissue-keyword heuristic.")
+    tum = ap.add_mutually_exclusive_group()
+    tum.add_argument("--tumour", dest="tumour", action="store_const", const=True, default=None,
+                     help="the sample contains malignant cells (drives the malignant gate)")
+    tum.add_argument("--no-tumour", dest="tumour", action="store_const", const=False,
+                     help="the sample has no malignant cells. Omit BOTH to fall back to the "
+                          "tissue-keyword heuristic.")
     ap.add_argument("--resolution", type=float, default=0.5,
                     help="leiden clustering resolution (default 0.5, matching the app's cluster cap)")
     ap.add_argument("--reference", default=None,
@@ -53,16 +60,21 @@ def main(argv: list[str] | None = None) -> int:
     from spatialscribe.analysis import llm
     from spatialscribe.analysis import pipeline as _pl
 
-    # Resolve the path the same way the backend load_section does (corrects a dropped mount prefix).
-    path = cap._resolve_server_path((args.section or "").strip())
-    if path is None:
-        print(f"error: section not found on the server: {args.section!r}", file=sys.stderr)
-        return 2
-    try:
-        a = _io.load(path).adata
-    except Exception as exc:  # noqa: BLE001 - a load failure is a clean usage error, not a stack trace
-        print(f"error: could not load section: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 2
+    if args.demo:
+        from spatialscribe.analysis import demo as _demo
+        path = "synthetic-melanoma-demo"      # built in; no data files needed
+        a = _demo.load_demo().adata
+    else:
+        # Resolve the path the way the backend load_section does (corrects a dropped mount prefix).
+        path = cap._resolve_server_path((args.section or "").strip())
+        if path is None:
+            print(f"error: section not found on the server: {args.section!r}", file=sys.stderr)
+            return 2
+        try:
+            a = _io.load(path).adata
+        except Exception as exc:  # noqa: BLE001 - a clean usage error, not a stack trace
+            print(f"error: could not load section: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
     if "spatial" not in a.obsm:
         print("error: loaded section has no spatial coordinates (obsm['spatial'])", file=sys.stderr)
         return 2
@@ -77,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         reference, ref_key = _ref.load_reference(args.reference, label_key=args.ref_label_key)
 
     ctx = cap.RunContext(tissue=tissue, use_llm=llm.available(),
-                         is_tumour=(True if args.tumour else None),  # ponytail: no --no-tumour; omit => keyword gate
+                         is_tumour=args.tumour,   # True / False / None (None => tissue-keyword gate)
                          reference=reference, ref_label_key=ref_key)
     # Stream coarse progress to STDERR so a headless/SLURM run shows life without polluting stdout.
     ctx.progress = lambda f, l: print(f"[{f * 100:5.1f}%] {l}", file=sys.stderr, flush=True)

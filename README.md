@@ -9,10 +9,10 @@ language, without a terminal or R, and without waiting for a bioinformatician. B
 hackathon.
 
 <p align="center">
-  <img src="docs/demo.gif" alt="SpatialScribe: load a section, cluster, annotate, and hover the tissue to read each cell's type" width="820">
+  <img src="docs/demo.gif" alt="SpatialScribe: load a section, cluster, annotate, and hover a cell type to light it up across the tissue" width="820">
 </p>
 
-<p align="center"><em>Load a section, run the analysis, and hover the tissue - each cell's type lights up under the cursor.</em></p>
+<p align="center"><em>Load a section, run the analysis, then hover a cell type - those cells light up across the tissue.</em></p>
 
 ## What it does
 
@@ -23,8 +23,8 @@ A three-pane web app (React + FastAPI + deck.gl) over one shared analysis engine
   code) at every step.
 - **One-click full run** - or skip the wizard: **Run full analysis** runs the whole spine as one
   background job and opens a fully-analyzed section.
-- **Interactive spatial canvas** - lasso-select a region to QC it or exclude it; click a cell type
-  to subcluster it into subtypes; **hover any cell to read its type**.
+- **Interactive spatial canvas** - box-select a region to QC it or exclude it; click a cell type
+  to subcluster it into subtypes; **hover a cell type to highlight where it sits in the tissue**.
 - **Claude copilot** - ask questions in plain English ("are the T cells excluded from the tumor?")
   and it runs the real analysis and answers, grounded in the numbers - it can even recolor the
   canvas for you.

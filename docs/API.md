@@ -93,7 +93,7 @@ Base path `/api`. `{sid}` is the `session_id`. Request bodies are JSON unless no
 | GET | `/{sid}/progress` | Coarse progress of the step running now (pollable mid-run) | -> `{running, step, frac, label}` |
 | POST | `/{sid}/run_pipeline` | Start the FULL analysis spine as a background job (202) | body `{tumour?, rctd?, split?, resolution?}` -> `{started: true}` |
 | GET | `/{sid}/pipeline_status` | Progress + outcome of the background full run | -> `{running, frac, label, stage, done, error, route, stages, summary, state}` |
-| POST | `/{sid}/region_qc` | QC summary of a lasso/box-selected region vs the whole section | body `{indices: int[]}` -> `{n, region, section}` |
+| POST | `/{sid}/region_qc` | QC summary of a box-selected region vs the whole section | body `{indices: int[]}` -> `{n, region, section}` |
 | POST | `/{sid}/region_filter` | Drop (`exclude`) or crop-to (`keep`) selected cells, in place | body `{indices: int[], mode}` -> `{session_id, ...state}` |
 | POST | `/{sid}/rename_celltype` | Rename a cell type (reuse a name to merge), then recompute confidence | body `{old, new}` -> `{session_id, ...state}` |
 

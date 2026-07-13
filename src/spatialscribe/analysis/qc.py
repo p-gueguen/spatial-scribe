@@ -4,7 +4,7 @@ What it does
 ------------
 `compute_qc` adds per-cell QC columns (counts, genes, % control probes). `qc_summary`
 reduces them to section-level medians and flags them against the Xenium thresholds.
-`region_qc` computes the same summary for a lasso-selected subset of cells (H1), and
+`region_qc` computes the same summary for a box-select-selected subset of cells (H1), and
 `suggest_filter` returns sensible default cell filters.
 
 Depends on
@@ -212,7 +212,7 @@ def _flag(metrics: dict, platform: str = "xenium") -> dict[str, str]:
 
 
 def region_qc(adata, cell_index) -> dict:
-    """QC summary for a lasso-selected region (H1). ``cell_index`` = bool/int index."""
+    """QC summary for a box-select-selected region (H1). ``cell_index`` = bool/int index."""
     return qc_summary(adata, subset=cell_index)
 
 

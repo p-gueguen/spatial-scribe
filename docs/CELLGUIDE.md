@@ -86,18 +86,18 @@ Capability(
 )
 ```
 
-**Why this helps, concretely.** The live copilot/annotation backend is the internal **Qwen3.6-27B**
-vLLM (`localhost:8000`, `SPATIALSCRIBE_LLM_BASE_URL`), a local model with weaker biological recall
-than a frontier model. Giving it a deterministic marker/ontology lookup is RAG-for-annotation: the
-weak model stops guessing "what are T-cell markers?" from memory and instead **calls the list**, so
+**Why this helps, concretely.** The copilot defaults to Claude, but it is endpoint-agnostic and can
+run against a smaller local model (any OpenAI-compatible `/v1` server via `SPATIALSCRIBE_LLM_BASE_URL`).
+A smaller model has weaker biological recall, so a deterministic marker/ontology lookup is
+RAG-for-annotation: instead of guessing "what are T-cell markers?" from memory it **calls the list**, so
 its answers are grounded in the CZI corpus and carry a CL id. That is the "skill up" — the tool
 supplies the knowledge the small model lacks, and the grounding is auditable (canonical vs
 computational, with a snapshot id) rather than a hallucination.
 
 **Honest caveats before building it:**
-- Some Qwen vLLM builds intermittently emit **no `tool_calls`** and degrade to a text answer (seen on
+- Some some OpenAI-compatible servers intermittently emit **no `tool_calls`** and degrade to a text answer (seen on
   the live deploy; see the grounding-eval note in progress). A lookup tool only helps a backend that
-  reliably tool-calls; verify the deployed Qwen build does before relying on it.
+  reliably tool-calls; verify the deployed server does before relying on it.
 - Panel-check now **augments** curated with CellGuide (union, curated first), it does not replace it.
   `_apply_llm_markers_for_categories` unions CellGuide's canonical markers onto the curated baseline
   for EVERY annotated category, so under-covered curated lineages (Mast 4, NK 4, Endothelial 4 curated

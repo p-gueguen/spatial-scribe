@@ -1,4 +1,4 @@
-// QC (selling point): section metrics, the six-layer annotation-QC funnel, and region QC - lasso a
+// QC (selling point): section metrics, the six-layer annotation-QC funnel, and region QC - box-select a
 // region on the map to QC it, then exclude it or crop to it (region filtering).
 import React, { useEffect, useState } from "react";
 import * as api from "../api";
