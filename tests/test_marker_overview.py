@@ -156,3 +156,20 @@ def test_fallback_group_never_files_an_abstention_label_as_a_lineage():
     assert g["Myeloid"] == ["conventional DC"]                    # space-prefixed keyword " dc" still works
     flat = [t for v in g.values() for t in v]
     assert sorted(flat) == sorted(types)                          # still total: nothing dropped
+
+
+def test_marker_dotplot_survives_dead_llm_endpoint(monkeypatch):
+    # issue #1: a failing local LLM (row-grouping only) must not empty the dot-plot.
+    import anndata as ad, numpy as np, pandas as pd
+    from spatialscribe.analysis import capabilities as cap, llm, views
+    monkeypatch.setattr(llm, "group_cell_types", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("refused")))
+    monkeypatch.setattr(llm, "available", lambda: True)
+    rng = np.random.default_rng(0)
+    a = ad.AnnData(X=rng.poisson(1.0, size=(60, 4)).astype("float32"),
+                   var=pd.DataFrame(index=["CD3E", "EPCAM", "PECAM1", "PTPRC"]))
+    a.obs["cell_type"] = pd.Categorical(["T cell"] * 30 + ["Endothelial"] * 30)
+    a.obs_names = [f"c{i}" for i in range(60)]
+    ctx = cap.RunContext(tissue="breast", use_llm=True)
+    genes, order, _ = views.category_overview(a, ctx)
+    assert genes and set(order) == {"T cell", "Endothelial"}
+    assert a.uns["marker_overview_source"] == "keyword fallback"

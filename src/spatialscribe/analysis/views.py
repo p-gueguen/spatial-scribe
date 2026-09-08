@@ -290,7 +290,12 @@ def _category_groups(adata, ctx):
         if "cell_type" in adata.obs else []
     if getattr(ctx, "use_llm", False):
         from . import llm as _llm
-        g = _llm.group_cell_types(types, tissue=getattr(ctx, "tissue", ""))
+        # Row ORDER is cosmetic: a dead / misconfigured local endpoint must not take the whole
+        # dot-plot down with it (issue #1: "no on-panel markers to plot" on the stock demo).
+        try:
+            g = _llm.group_cell_types(types, tissue=getattr(ctx, "tissue", ""))
+        except Exception:
+            g = {}
         if g:
             return g, "LLM"
     return _fallback_group(types), "keyword fallback"
