@@ -73,11 +73,19 @@ def run_copilot(adata, prompt: str, tissue: str = "melanoma", max_turns: int = 6
     # loop drives Claude or an internal vLLM endpoint. (A server that returns no tool_calls just
     # yields a text answer, which we return - a graceful degrade rather than a crash.)
     messages: list[dict] = [{"role": "user", "content": prompt}]
+    # Tool calls that failed or drew nothing. Appended to the answer DETERMINISTICALLY, because a
+    # model (a local one especially) will happily say "the plot is drawn" over a failed tool result
+    # (issue #1). The user sees what the tool said, not what the model claims.
+    failures: list[str] = []
+
+    def _honest(text: str) -> str:
+        return text + ("\n\n" + "\n".join(failures) if failures else "")
+
     for _ in range(max_turns):
         turn = llm.tool_chat(system, messages, tools, max_tokens=1024)
         if not turn["tool_calls"]:
-            return turn["text"] or (
-                "I could not turn that into a concrete analysis - try a narrower question.")
+            return _honest(turn["text"] or (
+                "I could not turn that into a concrete analysis - try a narrower question."))
         messages.append(turn["assistant"])
         results = []
         for call in turn["tool_calls"]:
@@ -92,6 +100,10 @@ def run_copilot(adata, prompt: str, tissue: str = "melanoma", max_turns: int = 6
             if ctx.loaded and ctx.loaded[-1]["adata"] is not adata:
                 adata = ctx.loaded[-1]["adata"]
             payload = res.error if res.error is not None else res.value
+            if res.error is not None:
+                failures.append(f"Note: {call['name']} FAILED - {res.error.get('message', res.error) if isinstance(res.error, dict) else res.error}")
+            elif isinstance(res.value, dict) and res.value.get("rendered_view") is False:
+                failures.append(f"Note: {call['name']} drew nothing - {res.value.get('note') or 'no data to plot'}")
             if res.ok and res.record is not None and action_log is not None:
                 action_log.append(res.record)
             results.append({
@@ -100,4 +112,4 @@ def run_copilot(adata, prompt: str, tissue: str = "melanoma", max_turns: int = 6
                 "is_error": res.error is not None,
             })
         messages.append({"role": "user", "content": results})
-    return "I ran several analyses but could not converge on a concise answer - try a narrower question."
+    return _honest("I ran several analyses but could not converge on a concise answer - try a narrower question.")

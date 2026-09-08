@@ -221,9 +221,13 @@ def _openai_msgs(system: str, messages: list) -> list:
         if isinstance(content, list):               # tool_result blocks -> OpenAI 'tool' messages
             for blk in content:
                 if isinstance(blk, dict) and blk.get("type") == "tool_result":
-                    out.append({"role": "tool", "tool_call_id": blk["tool_use_id"],
-                                "content": blk["content"] if isinstance(blk["content"], str)
-                                else json.dumps(blk["content"], default=str)})
+                    body = blk["content"] if isinstance(blk["content"], str) \
+                        else json.dumps(blk["content"], default=str)
+                    # OpenAI tool messages have no is_error flag: say it in the text, or a local model
+                    # reads a failure payload as a result and reports success (issue #1).
+                    if blk.get("is_error"):
+                        body = "ERROR - this tool call FAILED, nothing was produced: " + body
+                    out.append({"role": "tool", "tool_call_id": blk["tool_use_id"], "content": body})
         else:
             out.append({"role": m.get("role", "user"), "content": content})
     return out
