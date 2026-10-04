@@ -89,9 +89,13 @@ server** (a local vLLM, OpenAI, ...):
 ```bash
 export ANTHROPIC_API_KEY=sk-...                       # Anthropic (default; ANTHROPIC_MODEL to override)
 # or:
-export SPATIALSCRIBE_LLM_BASE_URL=http://localhost:8000/v1 \
-       SPATIALSCRIBE_LLM_MODEL=<model-id> SPATIALSCRIBE_LLM_API_KEY=<key>
+export SPATIALSCRIBE_LLM_BASE_URL=http://localhost:8000/v1   # model id is read from /v1/models
+# optional: SPATIALSCRIBE_LLM_MODEL=<model-id> (a stale id falls back to the served one, with a
+# warning), SPATIALSCRIBE_LLM_API_KEY=<key>
 ```
+
+Reasoning models (DeepSeek, Qwen) get their thinking switched off per request; if a new model
+family still reasons, the backend logs a warning naming the switch to add (`llm._NO_THINKING`).
 
 **Your data never leaves your machine** - the analysis runs locally; only your plain-language
 question and the computed numbers are sent to the LLM.

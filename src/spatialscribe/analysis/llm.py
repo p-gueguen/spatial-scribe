@@ -9,7 +9,7 @@ Config - two interchangeable backends, chosen by environment (endpoint-agnostic)
 * **Anthropic** (default): ``ANTHROPIC_API_KEY`` [+ ``ANTHROPIC_MODEL``, default Haiku].
 * **OpenAI-compatible** (any ``/v1`` server - a self-hosted vLLM/TGI/Ollama endpoint, or
   OpenAI itself): set ``SPATIALSCRIBE_LLM_BASE_URL`` (e.g. ``http://<your-vllm-host>:8000/v1``),
-  ``SPATIALSCRIBE_LLM_MODEL`` (e.g. ``local-llm``), and optionally
+  optionally ``SPATIALSCRIBE_LLM_MODEL`` (unset/``auto`` -> the first id from ``/models``), and
   ``SPATIALSCRIBE_LLM_API_KEY`` (default ``dummy`` - vLLM ignores it). When the base URL is
   set it takes precedence over Anthropic. No extra SDK: we POST ``/chat/completions`` with httpx.
 """
@@ -17,6 +17,7 @@ Config - two interchangeable backends, chosen by environment (endpoint-agnostic)
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 
@@ -78,9 +79,11 @@ def available() -> bool:
 
 
 def default_model() -> str:
-    """The model id for the active backend (Anthropic default, or the configured OpenAI model)."""
+    """The model id for the active backend (Anthropic default, or the OpenAI model - as resolved by
+    the last call when it was discovered from the server, else as configured)."""
     if provider() == "openai":
-        return os.environ.get("SPATIALSCRIBE_LLM_MODEL", "")
+        m = os.environ.get("SPATIALSCRIBE_LLM_MODEL", "").strip()
+        return _RESOLVED.get(m, m)
     return _ANTHROPIC_DEFAULT
 
 
@@ -98,26 +101,43 @@ def get_client():
     return anthropic.Anthropic()
 
 
+# vLLM chat-template switch for reasoning models. The key is model-specific - Qwen's template reads
+# ``enable_thinking``, DeepSeek's reads ``thinking`` - and a template ignores keys it does not use, so
+# send both. Sending only the Qwen key left DeepSeek reasoning: the trace ate the budget and 5/5
+# annotation replies came back as malformed JSON. A new model family may need its key added here;
+# _openai_post logs a warning when a reply still carries a reasoning trace.
+_NO_THINKING = {"thinking": False, "enable_thinking": False}
+
+# Configured model id ("" / "auto" / a stale id) -> the id the server actually serves. The served id
+# drifts with every redeploy (Qwen on :8081 -> DeepSeek on :8000), so a hardcoded id is a time bomb.
+_RESOLVED: dict[str, str] = {}
+
+
+def _served_model(c, base: str, headers: dict) -> str:
+    r = c.get(f"{base}/models", headers=headers)
+    r.raise_for_status()
+    return r.json()["data"][0]["id"]
+
+
 def _openai_post(messages: list, max_tokens: int, model: str | None,
                  json_mode: bool = False, tools: list | None = None) -> dict:
     """POST an OpenAI-compatible ``/chat/completions`` and return the raw JSON dict.
 
-    Sends vLLM's ``chat_template_kwargs={"enable_thinking": false}`` - reasoning models otherwise
-    spend the token budget on a hidden reasoning trace and truncate the real answer. If the server
-    rejects that extension (a strict OpenAI endpoint -> HTTP 400) we retry without it, so the layer
-    stays endpoint-agnostic. ``json_mode`` requests a strict JSON object; ``tools`` (OpenAI schema)
-    enables function-calling.
+    Sends ``chat_template_kwargs=_NO_THINKING`` - reasoning models otherwise spend the token budget
+    on a hidden reasoning trace and truncate the real answer. If the server rejects that extension
+    (a strict OpenAI endpoint -> HTTP 400) we retry without it, so the layer stays endpoint-agnostic.
+    The model id comes from ``SPATIALSCRIBE_LLM_MODEL``; when that is unset, ``auto``, or answered
+    with a 404 (the id drifted), the first id from ``/models`` is used. ``json_mode`` requests a
+    strict JSON object; ``tools`` (OpenAI schema) enables function-calling.
     """
     import httpx
 
     base = _openai_base()
     if not base:
         raise RuntimeError("SPATIALSCRIBE_LLM_BASE_URL is not set.")
-    model = model or os.environ.get("SPATIALSCRIBE_LLM_MODEL")
-    if not model:
-        raise RuntimeError("SPATIALSCRIBE_LLM_MODEL is not set (required for the OpenAI backend).")
+    want = (model or os.environ.get("SPATIALSCRIBE_LLM_MODEL") or "").strip()
     key = os.environ.get("SPATIALSCRIBE_LLM_API_KEY", "dummy")
-    body: dict = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0}
+    body: dict = {"messages": messages, "max_tokens": max_tokens, "temperature": 0}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     if tools:
@@ -126,12 +146,30 @@ def _openai_post(messages: list, max_tokens: int, model: str | None,
     url = f"{base}/chat/completions"
     headers = {"Authorization": f"Bearer {key}"}
     with httpx.Client(timeout=180) as c:
-        r = c.post(url, json={**body, "chat_template_kwargs": {"enable_thinking": False}},
-                   headers=headers)
+        if want.lower() in ("", "auto") and want not in _RESOLVED:
+            _RESOLVED[want] = _served_model(c, base, headers)
+        use = _RESOLVED.get(want, want)
+        extra = {"chat_template_kwargs": _NO_THINKING}
+        r = c.post(url, json={**body, "model": use, **extra}, headers=headers)
+        if r.status_code == 404:  # the configured id is no longer served
+            fresh = _served_model(c, base, headers)
+            if fresh != use:
+                logging.getLogger(__name__).warning(
+                    "model %r is not served at %s - using %r (update SPATIALSCRIBE_LLM_MODEL)",
+                    use, base, fresh)
+                _RESOLVED[want] = use = fresh
+                r = c.post(url, json={**body, "model": use, **extra}, headers=headers)
         if r.status_code == 400:  # strict server rejected the vLLM reasoning-off extension
-            r = c.post(url, json=body, headers=headers)
+            extra = {}
+            r = c.post(url, json={**body, "model": use}, headers=headers)
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+    msg = ((data.get("choices") or [{}])[0].get("message") or {})
+    if extra and (msg.get("reasoning_content") or msg.get("reasoning")):
+        logging.getLogger(__name__).warning(
+            "%s still returned a reasoning trace with %s - its chat template uses another switch; "
+            "add it to llm._NO_THINKING", use, _NO_THINKING)
+    return data
 
 
 def _openai_text(data: dict) -> str:

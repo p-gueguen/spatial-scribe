@@ -1,6 +1,8 @@
 """Endpoint-agnostic LLM backend selection + OpenAI translation (offline, no network)."""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from spatialscribe.analysis import llm
@@ -216,3 +218,45 @@ def test_openai_dangling_closing_toolcall_tag_is_not_leaked(monkeypatch):
                         [{"name": "load_section", "description": "", "input_schema": {}}])
     assert "</tool_call>" not in out["text"]          # the dangling close tag never reaches the user
     assert "load_section" not in out["text"]           # nor the call-as-prose residue
+
+
+def _fake_vllm(monkeypatch, served="served-model"):
+    """Route llm._openai_post's httpx calls to an in-process fake vLLM; return the request log."""
+    import httpx
+
+    seen: list = []
+
+    def handler(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": served}]})
+        body = json.loads(req.content)
+        seen.append(body)
+        if body["model"] != served:
+            return httpx.Response(404, json={"message": f"The model `{body['model']}` does not exist."})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    real = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(llm, "_RESOLVED", {})
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_BASE_URL", "http://vllm/v1")
+    return seen
+
+
+def test_openai_post_switches_reasoning_off_for_qwen_and_deepseek(monkeypatch):
+    # Qwen's template reads enable_thinking, DeepSeek's reads thinking. Sending only the Qwen key left
+    # DeepSeek reasoning, and 5/5 annotation replies came back as malformed JSON.
+    seen = _fake_vllm(monkeypatch)
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", "served-model")
+    llm._openai_post([{"role": "user", "content": "hi"}], 10, None)
+    assert seen[0]["chat_template_kwargs"] == {"thinking": False, "enable_thinking": False}
+
+
+@pytest.mark.parametrize("configured", ["", "auto", "Qwen-retired"])
+def test_openai_model_is_discovered_when_unset_or_stale(monkeypatch, configured):
+    # The served id drifts on every redeploy (Qwen -> DeepSeek); unset/auto/stale must all resolve.
+    seen = _fake_vllm(monkeypatch)
+    monkeypatch.setenv("SPATIALSCRIBE_LLM_MODEL", configured)
+    assert llm.available() is True
+    assert llm._openai_text(llm._openai_post([{"role": "user", "content": "hi"}], 10, None)) == "ok"
+    assert seen[-1]["model"] == "served-model"
+    assert llm.default_model() == "served-model"
