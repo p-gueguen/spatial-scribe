@@ -750,6 +750,9 @@ def _lognorm_10k(a):
     return b
 
 
+_CELLTYPIST_MODEL: dict = {}   # {ref, key, model} of the last trained model
+
+
 def celltypist_transfer(adata, reference, ref_label_key: str, *, max_ref_cells: int = 20000,
                         key_added: str = "celltypist_label") -> dict:
     """Train CellTypist on a custom reference (panel-restricted) and predict per-cell labels.
@@ -793,8 +796,19 @@ def celltypist_transfer(adata, reference, ref_label_key: str, *, max_ref_cells: 
         if ref.obs[ref_label_key].nunique() < 2:
             return _skip("reference has fewer than 2 usable label classes on the shared panel")
 
-        model = celltypist.train(_lognorm_10k(ref), labels=ref_label_key, n_jobs=1,
-                                 use_SGD=True, feature_selection=False, check_expression=False)
+        # One-slot cache: the pipeline and self-heal retrain on the same (reference, panel) pair. Keyed on
+        # the reference OBJECT (held, so its id cannot be recycled) + everything that shapes `ref`.
+        key = (ref_label_key, tuple(shared), max_ref_cells)
+        hit = _CELLTYPIST_MODEL.get("ref") is reference and _CELLTYPIST_MODEL.get("key") == key
+        if hit:
+            model = _CELLTYPIST_MODEL["model"]
+        else:
+            # n_jobs: 167 s -> 14 s at 16 vs 1 on a 286k-cell reference; labels agree on 97.5% of cells,
+            # more than two n_jobs=1 runs agree with each other (96.3% - celltypist's SGD is unseeded).
+            model = celltypist.train(_lognorm_10k(ref), labels=ref_label_key, n_jobs=16,
+                                     use_SGD=True, feature_selection=False, check_expression=False)
+            _CELLTYPIST_MODEL.clear()
+            _CELLTYPIST_MODEL.update(ref=reference, key=key, model=model)
         sec = _lognorm_10k(adata[:, shared].copy())
         pred = celltypist.annotate(sec, model=model, majority_voting=False)
         col = pred.predicted_labels

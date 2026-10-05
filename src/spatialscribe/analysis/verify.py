@@ -124,7 +124,10 @@ def verify_annotation(adata, marker_sets: dict[str, list[str]] | None = None,
 
     # AUC corroborator (reuse) - restrict marker sets to on-panel genes.
     present_sets = _m.present(set(adata.var_names), marker_sets)
-    mpf = _em.marker_program_fidelity(adata, cluster_key, present_sets)
+    # It only reads the marker columns but densifies the whole X as float64 (53 GB at 699k cells):
+    # hand it the marker-gene slice - same numbers, 2.1 s -> 0.1 s per call at 100k cells.
+    mk = sorted({g for gs in present_sets.values() for g in gs})
+    mpf = _em.marker_program_fidelity(adata[:, mk] if mk else adata, cluster_key, present_sets)
     mpf_per = mpf.get("per_type", {})
 
     # panel-adequacy context (guarded against an h5ad round-trip that corrupts panel_check).

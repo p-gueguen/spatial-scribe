@@ -101,6 +101,13 @@ def run_pipeline(adata, ctx, opts: PipelineOptions | None = None) -> dict:
         _record(name, ("skipped:" if optional else "failed:") + why)
         return None
 
+    # Cancer-Finder only needs the raw counts: start it now so its ~10 s subprocess overlaps the
+    # stages below; malignant_concordance joins it (same defaults as that capability). It is reused only
+    # if the counts are unchanged by then, so this never alters the result.
+    from . import cancerfinder as _cf
+    cf_job = _cf.prefetch(adata, threshold=0.5, max_cells=25000) \
+        if _cnv.is_tumour_context(ctx.tissue, ctx.is_tumour)[0] else None
+
     # 1-4. QC, panel adequacy, reference match (only when a reference is loaded).
     _run("compute_qc")
     _run("panel_check")
@@ -181,6 +188,7 @@ def run_pipeline(adata, ctx, opts: PipelineOptions | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001 - export is best-effort; never abort the run on it
             _record("export", f"failed:{exc}")
 
+    _cf.discard(cf_job)                # no-op once joined; kills + cleans it when the stage never ran
     ctx.tick(1.0, "done")
     adata.uns["pipeline"] = {"route": route, "stages": stages}
     summary = {k: [s["name"] for s in stages if s["status"].split(":", 1)[0] == k]

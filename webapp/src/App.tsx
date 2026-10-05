@@ -235,7 +235,16 @@ export default function App() {
     if (r.error) setNote(r.error.hint || r.error.message || "step failed");
     const ns = { ...sess, ...r.state }; setSess(ns);
     const cb = r.state.obs_fields.includes(step.color) ? step.color : colorBy;
-    setColorBy(cb); await fetchPoints(sess.session_id, cb); await fetchSummary(sess.session_id);
+    setColorBy(cb);
+    ptsCache.current.clear();   // the run rewrote obs: every cached colouring is stale
+    // Spatial positions only change when cells are dropped (n changes), so refetch just the colours
+    // (1.1 MB vs 3.6 MB); a UMAP basis can be re-embedded by the run, so it always refetches in full.
+    const pc = pts && basis === "spatial" ? await api.getPoints(sess.session_id, cb, basis, true).catch(() => null) : null;
+    if (pc && pts && pc.n === pts.n) {
+      ptsCache.current.set(`${basis}:${cb}`, { rgb: pc.rgb, legend: pc.legend, ramp: pc.ramp, color_by: pc.color_by });
+      setPts(prev => prev ? { ...prev, rgb: pc.rgb, color_by: pc.color_by, legend: pc.legend, ramp: pc.ramp } : prev);
+    } else await fetchPoints(sess.session_id, cb);
+    await fetchSummary(sess.session_id);
     setRunningStep(null); setBusy(false);
   };
   const changeColor = async (cb: string) => { setEmphasize(null); if (sess) await recolor(sess.session_id, cb, basis); else setColorBy(cb); };

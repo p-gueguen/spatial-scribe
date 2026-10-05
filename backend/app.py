@@ -31,6 +31,7 @@ import anndata as ad
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse,
 )
@@ -73,6 +74,9 @@ def _mark_ran(s: dict, cap_name: str) -> None:
 
 app = FastAPI(title="SpatialScribe API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Level 1: a categorical recolour shrinks 1.14 MB -> ~70 KB in ~24 ms (level 9 costs ~290 ms for little
+# more). Starlette skips text/event-stream, so the copilot stream is not buffered.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
 
 
 @app.on_event("startup")
@@ -266,6 +270,17 @@ def _ramp_hex(color_by: str) -> list[str]:
     return ["#%02X%02X%02X" % (int(r), int(g), int(b)) for r, g, b in stops]
 
 
+def _lut_rgb(vals, pal: dict, default) -> list:
+    """Flat per-cell RGB for string ``vals`` through ``pal`` (label -> rgb), ``default`` for the rest.
+    One categorical-code lookup instead of a per-cell dict.get (79 ms -> a few ms at 100k cells)."""
+    import pandas as pd
+
+    keys = list(pal)
+    lut = np.array([pal[k] for k in keys] + [default], dtype=np.uint8)
+    codes = pd.Categorical(vals, categories=keys).codes      # -1 (absent) indexes the default row
+    return lut[codes].reshape(-1).tolist()
+
+
 def _colours(a, color_by: str, idx):
     """Per-cell RGB (flat uint8) + categorical legend, matching the Plotly/deck palette."""
     col = a.obs[color_by]
@@ -273,8 +288,7 @@ def _colours(a, color_by: str, idx):
         # Fixed green/amber/red for PASS/WARN/FAIL so the spatial overlay reads the same as the
         # confidence meter, instead of the arbitrary categorical palette (cyan/magenta/green).
         vals = col.astype(str).to_numpy()[idx]
-        rgb = np.array([_hex(_VERDICT_COLOURS.get(v, "#6A7080")) for v in vals],
-                       dtype=np.uint8).reshape(-1).tolist()
+        rgb = _lut_rgb(vals, {k: _hex(c) for k, c in _VERDICT_COLOURS.items()}, _hex("#6A7080"))
         present = [c for c in ("PASS", "WARN", "FAIL") if (vals == c).any()]
         return rgb, [{"label": c, "color": _hex(_VERDICT_COLOURS[c])} for c in present]
     if color_by in ("cell_type", "cell_type_final"):
@@ -293,7 +307,7 @@ def _colours(a, color_by: str, idx):
         for c in cats:                                  # "Not assigned" reads grey, never a lineage hue
             if _annotate.is_abstention(str(c)):
                 pal[c] = [136, 146, 166]
-        rgb = np.array([pal.get(c, [136, 146, 166]) for c in vals], dtype=np.uint8).reshape(-1).tolist()
+        rgb = _lut_rgb(vals, pal, [136, 146, 166])
         return rgb, [{"label": str(c), "color": pal[c]} for c in cats[:35]]
     v = np.asarray(col)[idx].astype(float)
     finite = v[np.isfinite(v)]
@@ -317,7 +331,9 @@ def _fig_to_png_b64(fig) -> str | None:
         w = int(getattr(fig.layout, "width", None) or 760)
         h = int(getattr(fig.layout, "height", None) or 460)
         w, h = max(320, min(w, 2200)), max(240, min(h, 1400))
-        png = fig.to_image(format="png", width=w, height=h, scale=2)  # kaleido
+        # scale=1: the panel shows these at about their layout size; scale=2 doubled the bytes
+        # (cluster_markers 795 KB) for detail nobody sees.
+        png = fig.to_image(format="png", width=w, height=h, scale=1)  # kaleido
         import base64 as _b64
         return "data:image/png;base64," + _b64.b64encode(png).decode()
     except Exception:
@@ -1441,5 +1457,18 @@ from pathlib import Path as _Path
 from fastapi.staticfiles import StaticFiles
 
 _DIST = _Path(__file__).resolve().parents[1] / "webapp" / "dist"
+
+
+class _SPAFiles(StaticFiles):
+    """Hashed /assets/* never change -> cache for a year; index.html must be revalidated, or a browser
+    keeps a stale page pointing at assets a rebuild deleted."""
+
+    async def get_response(self, path, scope):
+        r = await super().get_response(path, scope)
+        r.headers["Cache-Control"] = ("public, max-age=31536000, immutable" if path.startswith("assets/")
+                                      else "no-cache")
+        return r
+
+
 if (_DIST / "index.html").exists():
-    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="spa")
+    app.mount("/", _SPAFiles(directory=str(_DIST), html=True), name="spa")

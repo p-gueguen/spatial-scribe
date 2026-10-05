@@ -169,6 +169,35 @@ def _rctd_rds_to_adata(path: str | Path) -> "anndata.AnnData":
     return adata
 
 
+def _rds_cached(p: Path) -> "anndata.AnnData":
+    """``_rctd_rds_to_adata``, with the converted AnnData kept as an .h5ad in ``$SPATIALSCRIBE_REF_CACHE``
+    (when set) keyed by the .rds path, size and mtime. Conversion costs 12-19 s per load; re-reading
+    the .h5ad 7.6 s. Never writes next to the source reference."""
+    import anndata as ad
+
+    root = os.environ.get("SPATIALSCRIBE_REF_CACHE")
+    if not root:
+        return _rctd_rds_to_adata(p)
+    import hashlib
+
+    st = p.stat()
+    # The resolved path is in the key: two references with the same name, size and mtime (a `cp -a`
+    # copy edited elsewhere) must never share an entry.
+    where = hashlib.sha256(str(p.resolve()).encode()).hexdigest()[:16]
+    out = Path(root) / f"{p.stem}.{where}.{st.st_size}.{st.st_mtime_ns}.h5ad"
+    if out.exists():
+        return ad.read_h5ad(out)
+    adata = _rctd_rds_to_adata(p)
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        tmp = out.with_name(out.name + f".{os.getpid()}.tmp")
+        adata.write_h5ad(tmp)
+        os.replace(tmp, out)                # atomic: a concurrent reader never sees a partial file
+    except Exception:  # noqa: BLE001 - the cache is an optimisation
+        pass
+    return adata
+
+
 def load_reference(path: str | Path, *, label_key: str | None = None,
                    gene_name_col: str | None = None) -> tuple["anndata.AnnData", str]:
     """Read a scRNA/snRNA reference -> ``(AnnData, label_key)``.
@@ -183,7 +212,7 @@ def load_reference(path: str | Path, *, label_key: str | None = None,
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"reference not found: {path}")
-    adata = _rctd_rds_to_adata(p) if p.suffix.lower() == ".rds" else ad.read_h5ad(p)
+    adata = _rds_cached(p) if p.suffix.lower() == ".rds" else ad.read_h5ad(p)
     _symbolize_var_names(adata, gene_name_col)
     key = label_key or detect_label_key(adata)
     if key is None or key not in adata.obs.columns:
@@ -816,8 +845,35 @@ def auto_select_reference(tissue_freetext: str, panel_genes=None, *, registry: d
 # --------------------------------------------------------------------------- #
 # The metric: reference <-> panel match
 # --------------------------------------------------------------------------- #
+# One-slot memo for reference_panel_match: the reference_match capability and the annotation_strategy
+# gate score the same (reference, panel) pair back to back (~10-17 s each on a 286k-cell reference).
+_MATCH_MEMO: dict = {}
+
+
 def reference_panel_match(reference, panel_genes, label_key: str,
                           target_depth: float | None = None, tissue: str | None = None) -> dict:
+    """Memoized :func:`_reference_panel_match` (deterministic: seeded). Keyed on the reference OBJECT
+    (held, so its id cannot be recycled) plus a hash of its labels, so an in-place relabel misses.
+    Returns a deep copy - callers annotate the result in place."""
+    import copy
+
+    import pandas as pd
+
+    try:
+        lab = (int(pd.util.hash_pandas_object(reference.obs[label_key].astype(str), index=False).sum())
+               if label_key in reference.obs else None)
+        key = (tuple(map(str, panel_genes)), str(label_key), target_depth, tissue, lab)
+    except Exception:  # noqa: BLE001 - unhashable input: just compute
+        return _reference_panel_match(reference, panel_genes, label_key, target_depth, tissue)
+    if _MATCH_MEMO.get("ref") is not reference or _MATCH_MEMO.get("key") != key:
+        res = _reference_panel_match(reference, panel_genes, label_key, target_depth, tissue)
+        _MATCH_MEMO.clear()
+        _MATCH_MEMO.update(ref=reference, key=key, res=res)
+    return copy.deepcopy(_MATCH_MEMO["res"])
+
+
+def _reference_panel_match(reference, panel_genes, label_key: str,
+                           target_depth: float | None = None, tissue: str | None = None) -> dict:
     """Global reference<->panel match score + per-cell-type resolvability.
 
     Built on :func:`eval_metrics.panel_resolvability` (depth-matched per-class F1, which
